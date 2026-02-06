@@ -25,7 +25,9 @@ export function createSessionMiddleware(): RequestHandler {
     saveUninitialized: false, // Don't create session until something is stored
     name: 'basecamp.sid',
     cookie: {
-      secure: env.NODE_ENV === 'production', // HTTPS only in prod
+      // Secure cookies require HTTPS. Default: true in production.
+      // Override with COOKIE_SECURE=false for Tailscale (no HTTPS needed).
+      secure: env.COOKIE_SECURE ?? env.NODE_ENV === 'production',
       httpOnly: true, // Not accessible via JS
       sameSite: 'lax', // CSRF protection — blocks cross-origin POST
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days

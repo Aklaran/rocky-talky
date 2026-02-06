@@ -13,6 +13,12 @@ export const envSchema = z.object({
   SESSION_SECRET: z
     .string()
     .min(32, 'SESSION_SECRET must be at least 32 characters'),
+  // Override secure cookie flag. Defaults to true in production.
+  // Set to 'false' for Tailscale deployments (HTTPS not needed).
+  COOKIE_SECURE: z
+    .enum(['true', 'false'])
+    .optional()
+    .transform((val) => val === 'true'),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).optional(),
 })
 

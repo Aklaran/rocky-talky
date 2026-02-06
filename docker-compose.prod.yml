@@ -10,6 +10,7 @@ services:
     environment:
       DATABASE_URL: postgresql://basecamp:${POSTGRES_PASSWORD:-basecamp_dev}@postgres:5432/basecamp
       SESSION_SECRET: ${SESSION_SECRET}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
       NODE_ENV: production
       PORT: 3000
     depends_on:
