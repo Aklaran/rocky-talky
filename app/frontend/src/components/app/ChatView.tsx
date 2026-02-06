@@ -1,4 +1,5 @@
 import { trpc } from '@/lib/trpc'
+import { useAIStream } from '@/hooks/useAIStream'
 import { MessageList } from './MessageList'
 import { MessageInput } from './MessageInput'
 import { ChatHeader } from './ChatHeader'
@@ -9,8 +10,15 @@ import { Skeleton } from '@/components/ui/skeleton'
  *
  * Handles:
  * - Fetching conversation data
- * - Sending messages (optimistic UI updates)
+ * - Sending messages + triggering AI response stream
+ * - Streaming display of AI responses
  * - Loading and error states
+ *
+ * Flow:
+ * 1. User types message → sendMessage mutation stores it
+ * 2. On success → trigger AI stream via SSE
+ * 3. Stream chunks display progressively in the message list
+ * 4. On stream complete → refetch conversation to get final saved message
  */
 interface ChatViewProps {
   conversationId: string
@@ -18,6 +26,7 @@ interface ChatViewProps {
 
 export function ChatView({ conversationId }: ChatViewProps) {
   const utils = trpc.useUtils()
+  const { streamingContent, isStreaming, error: streamError, generate } = useAIStream()
 
   const {
     data: conversation,
@@ -27,10 +36,18 @@ export function ChatView({ conversationId }: ChatViewProps) {
 
   const sendMessage = trpc.chat.sendMessage.useMutation({
     onSuccess: () => {
-      // Refetch conversation to get the new message
+      // Refetch conversation to show the user message
       utils.chat.get.invalidate({ id: conversationId })
       // Refetch list to update preview/ordering
       utils.chat.list.invalidate()
+      // Start AI response stream
+      generate(conversationId, {
+        onComplete: () => {
+          // Refetch to get the saved assistant message
+          utils.chat.get.invalidate({ id: conversationId })
+          utils.chat.list.invalidate()
+        },
+      })
     },
   })
 
@@ -68,12 +85,21 @@ export function ChatView({ conversationId }: ChatViewProps) {
   return (
     <div className="flex flex-1 flex-col">
       <ChatHeader conversation={conversation} />
-      <MessageList messages={conversation.messages} />
+      <MessageList
+        messages={conversation.messages}
+        streamingContent={streamingContent}
+        isStreaming={isStreaming}
+      />
+      {streamError && (
+        <div className="border-t bg-destructive/10 px-4 py-2 text-sm text-destructive">
+          AI error: {streamError}
+        </div>
+      )}
       <MessageInput
         onSend={(content) =>
           sendMessage.mutate({ conversationId, content })
         }
-        disabled={sendMessage.isPending}
+        disabled={sendMessage.isPending || isStreaming}
       />
     </div>
   )

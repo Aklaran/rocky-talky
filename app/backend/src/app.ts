@@ -7,6 +7,7 @@ import { createContext } from './lib/middleware/context'
 import { createSessionMiddleware } from './lib/clients/session'
 import appRouter from './routes/root'
 import authRouter from './routes/auth'
+import streamRouter from './routes/stream'
 
 // Validate environment — fail fast
 getEnv()
@@ -45,6 +46,9 @@ app.use(createSessionMiddleware())
 
 // Auth routes (REST — not tRPC)
 app.use('/api/auth', authRouter)
+
+// AI streaming route (REST SSE — not tRPC)
+app.use('/api/chat', streamRouter)
 
 // tRPC API
 app.use(

@@ -1,5 +1,7 @@
 import { TRPCError } from '@trpc/server'
 import * as chatRepo from '../repositories/chatRepository'
+import * as aiService from './aiService'
+import { getEnv } from '../lib/env'
 import type {
   ConversationListItem,
   ConversationDetail,
@@ -7,6 +9,7 @@ import type {
   CreateConversationInput,
   SendMessageInput,
 } from '@shared/schemas/chat'
+import type { AIMessage } from '@shared/schemas/ai'
 import logger from '@shared/util/logger'
 
 /**
@@ -16,8 +19,7 @@ import logger from '@shared/util/logger'
  * - Ownership checks (users can only access their own conversations)
  * - Data shaping (Prisma types → API output types)
  * - Orchestration (e.g., auto-generating conversation titles)
- *
- * Phase 4 will add: calling aiService for assistant responses.
+ * - AI response generation (Phase 4)
  */
 
 // =============================================================================
@@ -113,10 +115,8 @@ export async function deleteConversation(
 }
 
 /**
- * Send a user message to a conversation.
- *
- * Phase 3: stores the message, returns it. No AI response.
- * Phase 4: will also call aiService and stream back an assistant response.
+ * Send a user message to a conversation. Returns the stored user message.
+ * Does NOT trigger AI response — that's handled by generateResponse().
  */
 export async function sendMessage(
   userId: string,
@@ -148,9 +148,118 @@ export async function sendMessage(
 
   logger.debug({ conversationId: input.conversationId, messageId: message.id }, 'Message sent')
 
-  // Phase 4: call aiService here and return/stream the assistant response
-
   return toMessageOutput(message)
+}
+
+// =============================================================================
+// AI Response Generation
+// =============================================================================
+
+/**
+ * Verify a user owns a conversation. Returns the conversation or throws.
+ */
+export async function verifyConversationOwnership(
+  conversationId: string,
+  userId: string,
+) {
+  const conversation = await chatRepo.getConversation(conversationId)
+
+  if (!conversation) {
+    throw new TRPCError({ code: 'NOT_FOUND', message: 'Conversation not found' })
+  }
+
+  if (conversation.userId !== userId) {
+    throw new TRPCError({ code: 'NOT_FOUND', message: 'Conversation not found' })
+  }
+
+  return conversation
+}
+
+/**
+ * Build the message history for an AI request from a conversation.
+ * Includes the system prompt if configured.
+ */
+export function buildAIMessages(
+  conversationMessages: { role: string; content: string }[],
+): AIMessage[] {
+  const env = getEnv()
+  const messages: AIMessage[] = []
+
+  // Prepend system prompt if configured
+  const systemPrompt = env.AI_SYSTEM_PROMPT
+  if (systemPrompt) {
+    messages.push({ role: 'system', content: systemPrompt })
+  }
+
+  // Add conversation history
+  for (const msg of conversationMessages) {
+    messages.push({
+      role: msg.role as AIMessage['role'],
+      content: msg.content,
+    })
+  }
+
+  return messages
+}
+
+/**
+ * Stream an AI response for a conversation.
+ *
+ * Yields text chunks as they arrive from the AI provider.
+ * Saves the complete assistant message to DB when done.
+ *
+ * Returns the final saved message.
+ */
+export async function* generateResponseStream(
+  conversationId: string,
+  userId: string,
+): AsyncGenerator<string, MessageOutput> {
+  const conversation = await verifyConversationOwnership(conversationId, userId)
+  const aiMessages = buildAIMessages(conversation.messages)
+
+  logger.debug(
+    { conversationId, messageCount: aiMessages.length },
+    'Starting AI response generation',
+  )
+
+  let fullContent = ''
+
+  for await (const chunk of aiService.chatStream(aiMessages)) {
+    fullContent += chunk
+    yield chunk
+  }
+
+  // Save the complete assistant message
+  const savedMessage = await chatRepo.addMessage(conversationId, 'assistant', fullContent)
+
+  logger.info(
+    { conversationId, messageId: savedMessage.id, length: fullContent.length },
+    'AI response saved',
+  )
+
+  return toMessageOutput(savedMessage)
+}
+
+/**
+ * Generate a non-streaming AI response.
+ * Used for structured outputs or when streaming isn't needed.
+ */
+export async function generateResponse(
+  conversationId: string,
+  userId: string,
+): Promise<MessageOutput> {
+  const conversation = await verifyConversationOwnership(conversationId, userId)
+  const aiMessages = buildAIMessages(conversation.messages)
+
+  const content = await aiService.chat(aiMessages)
+  const savedMessage = await chatRepo.addMessage(conversationId, 'assistant', content)
+
+  logger.info(
+    { conversationId, messageId: savedMessage.id, length: content.length },
+    'AI response saved',
+  )
+
+  return toMessageOutput(savedMessage)
 }
 
 // =============================================================================

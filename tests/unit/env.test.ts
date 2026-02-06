@@ -56,4 +56,42 @@ describe('Environment validation', () => {
       expect(result.data.PORT).toBe(8080)
     }
   })
+
+  // Phase 4: AI env vars
+  it('accepts valid AI configuration', () => {
+    const result = envSchema.safeParse({
+      DATABASE_URL: 'postgresql://user:pass@localhost:5432/db',
+      SESSION_SECRET: 'a'.repeat(32),
+      AI_PROVIDER: 'openai',
+      AI_MODEL: 'gpt-4o-mini',
+      OPENAI_API_KEY: 'sk-test-key',
+    })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.AI_PROVIDER).toBe('openai')
+      expect(result.data.AI_MODEL).toBe('gpt-4o-mini')
+    }
+  })
+
+  it('AI vars are all optional (graceful degradation)', () => {
+    const result = envSchema.safeParse({
+      DATABASE_URL: 'postgresql://user:pass@localhost:5432/db',
+      SESSION_SECRET: 'a'.repeat(32),
+    })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.AI_PROVIDER).toBeUndefined()
+      expect(result.data.AI_MODEL).toBeUndefined()
+      expect(result.data.OPENAI_API_KEY).toBeUndefined()
+    }
+  })
+
+  it('rejects invalid AI_PROVIDER value', () => {
+    const result = envSchema.safeParse({
+      DATABASE_URL: 'postgresql://user:pass@localhost:5432/db',
+      SESSION_SECRET: 'a'.repeat(32),
+      AI_PROVIDER: 'invalid-provider',
+    })
+    expect(result.success).toBe(false)
+  })
 })
