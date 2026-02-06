@@ -21,6 +21,7 @@
     "typecheck": "tsc --noEmit -p app/backend/tsconfig.json && tsc --noEmit -p app/frontend/tsconfig.json",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:setup": "docker compose exec postgres psql -U basecamp -c 'CREATE DATABASE basecamp_test;' 2>/dev/null; DATABASE_URL=postgresql://basecamp:basecamp_dev@localhost:5432/basecamp_test pnpm migrate",
     "test:e2e": "playwright test",
     "docker:dev": "docker compose up",
     "docker:prod": "docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d"
