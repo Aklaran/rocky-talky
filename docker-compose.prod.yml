@@ -1,5 +1,5 @@
-# Production overrides — adds backend container + optional nginx
-# Usage: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+# Production compose — full stack in Docker
+# Usage: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 services:
   backend:
     build:
@@ -7,12 +7,19 @@ services:
       dockerfile: docker/Dockerfile
     ports:
       - '3000:3000'
-    env_file:
-      - .env
+    environment:
+      DATABASE_URL: postgresql://basecamp:${POSTGRES_PASSWORD:-basecamp_dev}@postgres:5432/basecamp
+      SESSION_SECRET: ${SESSION_SECRET}
+      NODE_ENV: production
+      PORT: 3000
     depends_on:
       postgres:
         condition: service_healthy
     restart: unless-stopped
+    logging:
+      options:
+        max-size: '10m'
+        max-file: '3'
 
   # Optional: uncomment for internet-facing deployments with SSL
   # nginx:
@@ -22,6 +29,7 @@ services:
   #     - '443:443'
   #   volumes:
   #     - ./docker/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+  #     - ./app/frontend/dist:/usr/share/nginx/html:ro
   #   depends_on:
   #     - backend
   #   restart: unless-stopped

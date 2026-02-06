@@ -1,66 +1,63 @@
 #!/bin/bash
 set -e
 
-# Start Basecamp in production mode over Tailscale
+# Start Basecamp in production mode over Tailscale — fully dockerized
 # Express serves built frontend static files — no nginx needed
 # http://<tailscale-ip>:3000
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+cd "$PROJECT_DIR"
 
 # Get Tailscale IP
 TS_IP=$(tailscale ip -4 2>/dev/null || echo "unknown")
-echo "🏔️  Basecamp Tailscale Prod"
-echo "=========================="
+echo "🏔️  Basecamp Tailscale Prod (Docker)"
+echo "====================================="
+echo ""
 
-# Ensure postgres is running
-echo "Starting postgres..."
-cd "$PROJECT_DIR"
-sg docker -c "docker compose up -d postgres"
-until sg docker -c "docker compose exec postgres pg_isready -U basecamp -d basecamp" > /dev/null 2>&1; do
+# Ensure we have a SESSION_SECRET
+if [ -z "$SESSION_SECRET" ]; then
+  # Try .env file
+  if [ -f .env ]; then
+    SESSION_SECRET=$(grep -E '^SESSION_SECRET=' .env | cut -d= -f2-)
+  fi
+  if [ -z "$SESSION_SECRET" ]; then
+    echo "⚠️  No SESSION_SECRET set. Generating a random one..."
+    SESSION_SECRET=$(openssl rand -hex 32)
+  fi
+fi
+export SESSION_SECRET
+
+# Ensure we have a POSTGRES_PASSWORD
+if [ -z "$POSTGRES_PASSWORD" ]; then
+  if [ -f .env ]; then
+    POSTGRES_PASSWORD=$(grep -E '^POSTGRES_PASSWORD=' .env | cut -d= -f2-)
+  fi
+  POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-basecamp_dev}"
+fi
+export POSTGRES_PASSWORD
+
+echo "Building and starting all services..."
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+
+echo ""
+echo "Waiting for backend to be healthy..."
+for i in $(seq 1 30); do
+  if curl -sf http://localhost:3000/api/trpc/health.check > /dev/null 2>&1; then
+    echo "✓ Backend healthy"
+    break
+  fi
+  if [ "$i" -eq 30 ]; then
+    echo "✗ Backend failed to start — check logs:"
+    echo "  docker compose -f docker-compose.yml -f docker-compose.prod.yml logs backend"
+    exit 1
+  fi
   sleep 1
 done
-echo "✓ Postgres ready"
-
-# Build frontend
-echo "Building frontend..."
-cd "$PROJECT_DIR/app/frontend"
-npx vite build
-echo "✓ Frontend built"
-
-# Build backend
-echo "Building backend..."
-cd "$PROJECT_DIR/app/backend"
-rm -rf dist
-pnpm build
-echo "✓ Backend built"
-
-# Run migrations
-echo "Running migrations..."
-npx prisma migrate deploy 2>/dev/null || echo "  (no migrations to run)"
-echo "✓ Migrations done"
-
-# Kill any existing process on port 3000
-kill $(lsof -ti:3000) 2>/dev/null || true
-sleep 1
-
-# Start production server
-# tsc-alias rewrites path aliases to relative paths, so no tsconfig-paths needed
-cd "$PROJECT_DIR"
-NODE_ENV=production nohup node \
-  app/backend/dist/backend/src/server.js > /tmp/basecamp-prod.log 2>&1 &
-disown
-PROD_PID=$!
-
-sleep 2
-if curl -sf http://localhost:3000/api/trpc/health.check > /dev/null 2>&1; then
-  echo "✓ Server healthy"
-else
-  echo "✗ Server failed — check /tmp/basecamp-prod.log"
-fi
 
 echo ""
 echo "🏔️  Basecamp running at http://${TS_IP}:3000"
 echo ""
-echo "Logs: tail -f /tmp/basecamp-prod.log"
-echo "Stop: kill $PROD_PID"
+echo "Logs:    docker compose -f docker-compose.yml -f docker-compose.prod.yml logs -f"
+echo "Stop:    docker compose -f docker-compose.yml -f docker-compose.prod.yml down"
+echo "Restart: docker compose -f docker-compose.yml -f docker-compose.prod.yml restart backend"

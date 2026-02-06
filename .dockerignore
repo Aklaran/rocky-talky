@@ -1,0 +1,10 @@
+node_modules
+dist
+.git
+.env
+.env.local
+*.md
+coverage
+test-results
+playwright-report
+postgres_data

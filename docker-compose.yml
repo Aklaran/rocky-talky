@@ -6,7 +6,7 @@ services:
     environment:
       POSTGRES_DB: basecamp
       POSTGRES_USER: basecamp
-      POSTGRES_PASSWORD: basecamp_dev
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-basecamp_dev}
     ports:
       - '5432:5432'
     healthcheck:
