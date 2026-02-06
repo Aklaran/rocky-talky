@@ -1,0 +1,38 @@
+{
+  "name": "@basecamp/backend",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "clean": "rm -rf dist",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "dev": "tsx watch -r tsconfig-paths/register src/server.ts",
+    "migrate": "prisma migrate deploy",
+    "migrate:dev": "prisma migrate dev",
+    "seed": "prisma db seed",
+    "generate": "prisma generate"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed/seed.ts"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.0.0",
+    "@trpc/server": "^11.0.0",
+    "connect-pg-simple": "^10.0.0",
+    "dotenv": "^17.2.4",
+    "express": "^4.21.0",
+    "express-session": "^1.18.0",
+    "pino-http": "^10.0.0",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@types/connect-pg-simple": "^7.0.0",
+    "@types/express": "^4.17.0",
+    "@types/express-session": "^1.18.0",
+    "@types/node": "^22.0.0",
+    "prisma": "^6.0.0",
+    "tsconfig-paths": "^4.2.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.8.0"
+  }
+}

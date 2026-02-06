@@ -1,0 +1,36 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+*.tsbuildinfo
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+postgres_data/
+
+# Prisma
+app/backend/prisma/migrations/*.sql.bak
+
+# Test
+coverage/
+test-results/
+playwright-report/
+
+# Generated
+app/frontend/src/routeTree.gen.ts

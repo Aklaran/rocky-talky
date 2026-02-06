@@ -1,0 +1,12 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Phase 1: Empty schema — just enough for Prisma to connect.
+// Phase 2 adds: User model (auth)
+// Phase 3 adds: Conversation, Message models (chat)
