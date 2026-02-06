@@ -19,12 +19,12 @@
     "lib": ["ES2022"],
     "isolatedModules": true,
     "outDir": "./dist",
-    "rootDir": "./src",
+    "rootDir": "..",
     "paths": {
       "@backend/*": ["./src/*"],
       "@shared/*": ["../shared/*"]
     }
   },
-  "include": ["src"],
+  "include": ["src", "../shared"],
   "exclude": ["node_modules", "dist"]
 }

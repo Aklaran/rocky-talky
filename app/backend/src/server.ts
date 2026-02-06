@@ -8,7 +8,7 @@ if (fs.existsSync(envPath)) {
   configDotenv({ path: envPath })
 }
 
-import express from 'express'
+import express, { Express } from 'express'
 import * as trpcExpress from '@trpc/server/adapters/express'
 import httpLogger from 'pino-http'
 import logger from '@shared/util/logger'
@@ -19,7 +19,7 @@ import appRouter from './routes/root'
 // Validate environment — fail fast
 const env = getEnv()
 
-const app = express()
+const app: Express = express()
 
 // HTTP request logging
 app.use(
@@ -66,11 +66,16 @@ app.use(
 )
 
 // Serve frontend static files in production
+// In dev: __dirname = app/backend/src → ../../frontend/dist
+// In prod: __dirname = app/backend/dist/backend/src → ../../../../frontend/dist
 const distPath = path.join(__dirname, '../../frontend/dist')
-if (fs.existsSync(distPath)) {
-  app.use(express.static(distPath))
+const altDistPath = path.join(__dirname, '../../../../frontend/dist')
+const staticPath = fs.existsSync(distPath) ? distPath : altDistPath
+if (fs.existsSync(staticPath)) {
+  logger.info(`Serving static files from ${staticPath}`)
+  app.use(express.static(staticPath))
   app.get('*', (_req, res) => {
-    res.sendFile(path.join(distPath, 'index.html'))
+    res.sendFile(path.join(staticPath, 'index.html'))
   })
 }
 

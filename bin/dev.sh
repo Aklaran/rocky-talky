@@ -1,22 +1,24 @@
 #!/bin/bash
 set -e
 
-# Start all dev services with concurrently
-# Postgres runs via docker compose; backend + frontend run locally for hot reload
 echo "🏔️  Starting Basecamp dev environment..."
 
-# Ensure postgres is running
-docker compose up -d postgres
+# Check if postgres is reachable
+if node -e "const net=require('net');const s=net.connect(5432,'localhost',()=>{s.end();process.exit(0)});s.on('error',()=>process.exit(1))" 2>/dev/null; then
+  echo "Postgres ready."
+else
+  echo "Starting postgres..."
+  docker compose up -d postgres
 
-# Wait for postgres
-echo "Waiting for postgres..."
-until docker compose exec postgres pg_isready -U basecamp -d basecamp > /dev/null 2>&1; do
-  sleep 1
-done
-echo "Postgres ready."
+  echo "Waiting for postgres..."
+  until node -e "const net=require('net');const s=net.connect(5432,'localhost',()=>{s.end();process.exit(0)});s.on('error',()=>process.exit(1))" 2>/dev/null; do
+    sleep 1
+  done
+  echo "Postgres ready."
+fi
 
-# Run migrations
-cd app/backend && pnpm migrate 2>/dev/null || echo "No migrations to run yet." && cd ../..
+# Run migrations (if any exist)
+(cd app/backend && npx prisma migrate deploy 2>/dev/null) || echo "No migrations to run yet."
 
 # Start backend + frontend
 npx concurrently \

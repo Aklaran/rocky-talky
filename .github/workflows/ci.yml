@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: basecamp
+          POSTGRES_USER: basecamp
+          POSTGRES_PASSWORD: basecamp_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U basecamp -d basecamp"
+          --health-interval 5s
+          --health-timeout 2s
+          --health-retries 20
+
+    env:
+      DATABASE_URL: postgresql://basecamp:basecamp_test@localhost:5432/basecamp
+      SESSION_SECRET: test-secret-that-is-at-least-32-characters-long
+      NODE_ENV: test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm generate
+
+      - name: Run migrations
+        run: pnpm migrate
+        working-directory: app/backend
+
+      # - name: Lint
+      #   run: pnpm lint
+
+      - name: Typecheck backend
+        run: npx tsc --noEmit
+        working-directory: app/backend
+
+      - name: Unit & integration tests
+        run: pnpm test
+
+      - name: Install Playwright
+        run: npx playwright install --with-deps chromium
+
+      - name: E2E tests
+        run: pnpm test:e2e
+
+      - name: Build check
+        run: pnpm build
