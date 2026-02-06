@@ -21,7 +21,7 @@ export const envSchema = z.object({
     .transform((val) => val === 'true'),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).optional(),
 
-  // --- AI (Phase 4) ---
+  // --- AI ---
   // All optional — app works without AI, returns graceful fallback messages.
   AI_PROVIDER: z
     .enum(['openai', 'anthropic', 'mock'])

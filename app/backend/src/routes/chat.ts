@@ -57,7 +57,7 @@ export const chatRouter = router({
    * Send a message in a conversation.
    * Returns the stored user message.
    *
-   * Phase 4: this will also trigger an AI response (streamed).
+   * AI response is triggered separately via the SSE streaming endpoint.
    */
   sendMessage: protectedProcedure
     .input(sendMessageSchema)

@@ -19,7 +19,7 @@ import logger from '@shared/util/logger'
  * - Ownership checks (users can only access their own conversations)
  * - Data shaping (Prisma types → API output types)
  * - Orchestration (e.g., auto-generating conversation titles)
- * - AI response generation (Phase 4)
+ * - AI response generation
  */
 
 // =============================================================================

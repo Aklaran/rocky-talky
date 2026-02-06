@@ -25,6 +25,10 @@ export default defineConfig({
       url: 'http://localhost:3000/api/trpc/health.check',
       reuseExistingServer: !process.env.CI,
       timeout: 30000,
+      env: {
+        AI_PROVIDER: 'mock',
+        AI_MODEL: 'mock-model',
+      },
     },
     {
       command: 'pnpm dev:frontend',
