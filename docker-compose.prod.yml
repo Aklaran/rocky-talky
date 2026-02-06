@@ -13,6 +13,11 @@ services:
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
       NODE_ENV: production
       PORT: 3000
+      AI_PROVIDER: ${AI_PROVIDER:-}
+      AI_MODEL: ${AI_MODEL:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      AI_SYSTEM_PROMPT: ${AI_SYSTEM_PROMPT:-}
     depends_on:
       postgres:
         condition: service_healthy
