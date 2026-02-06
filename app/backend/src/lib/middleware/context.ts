@@ -1,17 +1,24 @@
 import * as trpcExpress from '@trpc/server/adapters/express'
+import { getUserById } from '../../services/authService'
 
 /**
  * tRPC context — created for each request.
  *
- * Phase 1: Just the session ID.
- * Phase 2 will add: user (from session → DB lookup)
+ * Extracts userId from session and hydrates the full user object.
+ * If session has a userId but user doesn't exist (deleted), user is null.
  */
 export async function createContext({
   req,
 }: trpcExpress.CreateExpressContextOptions) {
+  let user: Awaited<ReturnType<typeof getUserById>> = null
+
+  if (req.session?.userId) {
+    user = await getUserById(req.session.userId)
+  }
+
   return {
     sessionId: req.sessionID || null,
-    user: null as null, // Phase 2: will be User | null
+    user,
   }
 }
 

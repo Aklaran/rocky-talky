@@ -7,6 +7,21 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// Phase 1: Empty schema — just enough for Prisma to connect.
-// Phase 2 adds: User model (auth)
+// =============================================================================
+// Auth (Phase 2)
+// =============================================================================
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@map("users")
+}
+
+// Session table is managed by connect-pg-simple, not Prisma.
+// Created via its own DDL in the session setup module.
+
 // Phase 3 adds: Conversation, Message models (chat)
