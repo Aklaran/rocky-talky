@@ -12,11 +12,12 @@ datasource db {
 // =============================================================================
 
 model User {
-  id           String   @id @default(cuid())
-  email        String   @unique
-  passwordHash String   @map("password_hash")
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
+  id            String         @id @default(cuid())
+  email         String         @unique
+  passwordHash  String         @map("password_hash")
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+  conversations Conversation[]
 
   @@map("users")
 }
@@ -24,4 +25,37 @@ model User {
 // Session table is managed by connect-pg-simple, not Prisma.
 // Created via its own DDL in the session setup module.
 
-// Phase 3 adds: Conversation, Message models (chat)
+// =============================================================================
+// Chat (Phase 3)
+// =============================================================================
+
+model Conversation {
+  id        String    @id @default(cuid())
+  title     String?
+  userId    String    @map("user_id")
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  messages  Message[]
+
+  @@index([userId])
+  @@map("conversations")
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String       @map("conversation_id")
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  role           MessageRole
+  content        String
+  createdAt      DateTime     @default(now()) @map("created_at")
+
+  @@index([conversationId])
+  @@map("messages")
+}
+
+enum MessageRole {
+  system
+  user
+  assistant
+}

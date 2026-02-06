@@ -30,7 +30,7 @@ function LoginPage() {
       } else {
         await login(email, password)
       }
-      navigate({ to: '/' })
+      navigate({ to: '/chat' })
     } catch (err: unknown) {
       if (err instanceof Error) {
         setError(err.message)

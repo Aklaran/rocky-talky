@@ -9,8 +9,14 @@ export const Route = createFileRoute('/')({
 
 function Home() {
   const health = trpc.health.check.useQuery()
-  const { user, isLoading, logout } = useAuth()
+  const { user, isLoading } = useAuth()
   const navigate = useNavigate()
+
+  // Redirect authenticated users to chat
+  if (!isLoading && user) {
+    navigate({ to: '/chat' })
+    return null
+  }
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-6">
@@ -25,15 +31,6 @@ function Home() {
       <div className="text-center space-y-3">
         {isLoading ? (
           <p className="text-sm text-muted-foreground">Checking auth...</p>
-        ) : user ? (
-          <div className="space-y-2">
-            <p className="text-sm">
-              Signed in as <span className="font-medium">{user.email}</span>
-            </p>
-            <Button variant="outline" size="sm" onClick={() => logout()}>
-              Sign Out
-            </Button>
-          </div>
         ) : (
           <Button
             variant="default"

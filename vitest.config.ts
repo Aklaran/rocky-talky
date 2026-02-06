@@ -8,6 +8,9 @@ export default defineConfig({
     include: ['tests/**/*.test.ts'],
     setupFiles: ['tests/setup/global.ts'],
     testTimeout: 10000,
+    // Run integration test files sequentially — they share a DB.
+    // Unit tests (no DB) are fine in parallel.
+    fileParallelism: false,
   },
   resolve: {
     alias: {

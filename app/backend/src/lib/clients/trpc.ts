@@ -26,3 +26,4 @@ const isAuthenticated = trpc.middleware(async ({ ctx, next }) => {
 export const router = trpc.router
 export const publicProcedure = trpc.procedure
 export const protectedProcedure = trpc.procedure.use(isAuthenticated)
+export const createCallerFactory = trpc.createCallerFactory
