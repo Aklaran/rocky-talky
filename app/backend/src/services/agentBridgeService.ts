@@ -218,8 +218,12 @@ export async function createSession(sessionId: string): Promise<AgentSessionInfo
           logger.info({ sessionId, msg }, 'notify() callback fired')
           // Parse Sirdar agent completion notifications
           // Format: "Agent task-xyz completed: description" or "Agent task-xyz failed: description"
-          const completedMatch = msg.match(/Agent (task-[^\s]+) completed: (.+)/)
-          const failedMatch = msg.match(/Agent (task-[^\s]+) failed: (.+)/)
+          // Sirdar format: "✅ Agent completed: task-xyz\nDescription"
+          //            or: "❌ Agent failed: task-xyz\nDescription"
+          const completedMatch = msg.match(/Agent completed:\s*(task-[^\s\n]+)(?:\n(.+))?/) ||
+                                 msg.match(/Agent (task-[^\s]+) completed:\s*(.+)/)
+          const failedMatch = msg.match(/Agent failed:\s*(task-[^\s\n]+)(?:\n(.+))?/) ||
+                              msg.match(/Agent (task-[^\s]+) failed:\s*(.+)/)
           
           if (completedMatch) {
             const taskId = completedMatch[1]
@@ -411,7 +415,20 @@ export async function* sendMessage(
         })
         // Parse subagent result
         if (event.toolName === 'spawn_agent' && !event.isError) {
-          const resultText = String(event.result || '')
+          // event.result may be an object with content[].text or a string
+          const resultRaw = event.result
+          let resultText = ''
+          if (typeof resultRaw === 'string') {
+            resultText = resultRaw
+          } else if (resultRaw && typeof resultRaw === 'object') {
+            // MCP tool result: { content: [{ type: "text", text: "..." }] }
+            const content = (resultRaw as any).content
+            if (Array.isArray(content)) {
+              resultText = content.map((c: any) => c.text || '').join('\n')
+            } else {
+              resultText = JSON.stringify(resultRaw)
+            }
+          }
           logger.info({ sessionId, resultText }, 'spawn_agent tool result')
           // Sirdar format: "Agent spawned: task-xyz — description (...)\nStatus: running"
           const taskIdMatch = resultText.match(/Agent spawned:\s*(task-[^\s]+)/) ||
