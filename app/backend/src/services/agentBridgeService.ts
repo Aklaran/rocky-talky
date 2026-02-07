@@ -95,7 +95,10 @@ let _aiPromise: Promise<any> | null = null
 async function getSDK() {
   if (_sdkOverride) return _sdkOverride
   if (!_sdkPromise) {
-    _sdkPromise = import('@mariozechner/pi-coding-agent')
+    // Use Function constructor to prevent TypeScript from converting import() to require()
+    // Pi SDK is ESM-only and cannot be loaded via require()
+    const dynamicImport = new Function('specifier', 'return import(specifier)') as (s: string) => Promise<any>
+    _sdkPromise = dynamicImport('@mariozechner/pi-coding-agent')
   }
   return _sdkPromise
 }
@@ -103,7 +106,8 @@ async function getSDK() {
 async function getAI() {
   if (_aiOverride) return _aiOverride
   if (!_aiPromise) {
-    _aiPromise = import('@mariozechner/pi-ai')
+    const dynamicImport = new Function('specifier', 'return import(specifier)') as (s: string) => Promise<any>
+    _aiPromise = dynamicImport('@mariozechner/pi-ai')
   }
   return _aiPromise
 }
