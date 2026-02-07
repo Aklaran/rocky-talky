@@ -22,9 +22,10 @@ import { Skeleton } from '@/components/ui/skeleton'
  */
 interface ChatViewProps {
   conversationId: string
+  onToggleSidebar?: () => void
 }
 
-export function ChatView({ conversationId }: ChatViewProps) {
+export function ChatView({ conversationId, onToggleSidebar }: ChatViewProps) {
   const utils = trpc.useUtils()
   const { streamingContent, isStreaming, error: streamError, generate } = useAIStream()
 
@@ -84,7 +85,7 @@ export function ChatView({ conversationId }: ChatViewProps) {
 
   return (
     <div className="flex flex-1 flex-col">
-      <ChatHeader conversation={conversation} />
+      <ChatHeader conversation={conversation} onToggleSidebar={onToggleSidebar} />
       <MessageList
         messages={conversation.messages}
         streamingContent={streamingContent}

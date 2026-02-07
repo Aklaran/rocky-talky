@@ -51,7 +51,7 @@ export function MessageInput({ onSend, disabled }: MessageInputProps) {
   }
 
   return (
-    <div className="border-t bg-background p-4">
+    <div className="border-t bg-background p-4 pb-safe">
       <div className="mx-auto flex max-w-3xl gap-2">
         <Textarea
           ref={textareaRef}
@@ -61,14 +61,15 @@ export function MessageInput({ onSend, disabled }: MessageInputProps) {
           placeholder="Type a message... (Enter to send, Shift+Enter for newline)"
           disabled={disabled}
           rows={1}
-          className="min-h-[40px] max-h-[200px] resize-none"
+          className="min-h-[40px] max-h-[200px] resize-none text-base"
           data-testid="message-input"
+          style={{ fontSize: '16px' }}
         />
         <Button
           onClick={handleSend}
           disabled={disabled || !value.trim()}
           size="icon"
-          className="shrink-0 self-end"
+          className="shrink-0 self-end min-h-[44px] min-w-[44px]"
           data-testid="send-button"
         >
           <SendHorizontal className="h-4 w-4" />

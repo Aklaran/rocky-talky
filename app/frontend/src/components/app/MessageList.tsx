@@ -95,7 +95,7 @@ function MessageBubble({ message }: { message: MessageOutput }) {
       {/* Message content */}
       <div
         className={cn(
-          'max-w-[80%] rounded-lg px-4 py-2.5',
+          'max-w-[85%] md:max-w-[80%] rounded-lg px-4 py-2.5',
           isUser
             ? 'bg-primary text-primary-foreground'
             : 'bg-muted text-foreground',
@@ -122,7 +122,7 @@ function StreamingMessage({ content }: { content: string }) {
       </div>
 
       {/* Message content */}
-      <div className="max-w-[80%] rounded-lg px-4 py-2.5 bg-muted text-foreground">
+      <div className="max-w-[85%] md:max-w-[80%] rounded-lg px-4 py-2.5 bg-muted text-foreground">
         {content ? (
           <p className="whitespace-pre-wrap text-sm leading-relaxed">
             {content}

@@ -9,7 +9,12 @@ import { cn } from '@/lib/utils'
  * Conversation list in the sidebar.
  * Highlights the active conversation, shows title + preview.
  */
-export function ConversationList() {
+interface ConversationListProps {
+  /** Called when a conversation is selected (used to close mobile sidebar) */
+  onSelectConversation?: () => void
+}
+
+export function ConversationList({ onSelectConversation }: ConversationListProps = {}) {
   const navigate = useNavigate()
   // Get current conversationId from URL if we're on a conversation route
   const params = useParams({ strict: false }) as { conversationId?: string }
@@ -54,12 +59,13 @@ export function ConversationList() {
           <button
             key={convo.id}
             data-testid="conversation-item"
-            onClick={() =>
+            onClick={() => {
               navigate({
                 to: '/chat/$conversationId',
                 params: { conversationId: convo.id },
               })
-            }
+              onSelectConversation?.()
+            }}
             className={cn(
               'w-full rounded-md px-3 py-2.5 text-left transition-colors',
               'hover:bg-accent',

@@ -12,17 +12,19 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
-import { Trash2 } from 'lucide-react'
+import { Trash2, Menu } from 'lucide-react'
 import type { ConversationDetail } from '@shared/schemas/chat'
 
 /**
  * Chat header — shows conversation title and actions (delete).
+ * On mobile: includes hamburger menu to toggle sidebar.
  */
 interface ChatHeaderProps {
   conversation: ConversationDetail
+  onToggleSidebar?: () => void
 }
 
-export function ChatHeader({ conversation }: ChatHeaderProps) {
+export function ChatHeader({ conversation, onToggleSidebar }: ChatHeaderProps) {
   const navigate = useNavigate()
   const utils = trpc.useUtils()
 
@@ -35,13 +37,34 @@ export function ChatHeader({ conversation }: ChatHeaderProps) {
 
   return (
     <div data-testid="chat-header" className="flex items-center justify-between border-b px-4 py-3">
-      <h2 className="truncate text-base font-medium">
-        {conversation.title || 'New conversation'}
-      </h2>
+      <div className="flex items-center gap-2">
+        {/* Hamburger menu - only visible on mobile */}
+        {onToggleSidebar && (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onToggleSidebar}
+            title="Open menu"
+            className="md:hidden min-h-[44px] min-w-[44px]"
+            data-testid="toggle-sidebar"
+          >
+            <Menu className="h-5 w-5" />
+          </Button>
+        )}
+        <h2 className="truncate text-base font-medium">
+          {conversation.title || 'New conversation'}
+        </h2>
+      </div>
 
       <AlertDialog>
         <AlertDialogTrigger asChild>
-          <Button variant="ghost" size="icon" title="Delete conversation" data-testid="delete-conversation">
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            title="Delete conversation" 
+            data-testid="delete-conversation"
+            className="min-h-[44px] min-w-[44px]"
+          >
             <Trash2 className="h-4 w-4 text-muted-foreground" />
           </Button>
         </AlertDialogTrigger>
