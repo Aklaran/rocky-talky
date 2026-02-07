@@ -18,11 +18,21 @@ export interface ToolCall {
   isError: boolean
 }
 
+export interface SubagentInfo {
+  toolCallId: string
+  taskId: string | null
+  description: string
+  tier: string
+  status: 'spawning' | 'running' | 'completed' | 'failed'
+  outputLines: string[]
+}
+
 export interface UseAgentStreamReturn {
   streamingText: string
   isStreaming: boolean
   isCompacting: boolean
   activeTools: ToolCall[]
+  subagents: SubagentInfo[]
   error: string | null
   sendAndStream: (sessionId: string) => Promise<void>
 }
@@ -32,6 +42,7 @@ export function useAgentStream(): UseAgentStreamReturn {
   const [isStreaming, setIsStreaming] = useState(false)
   const [isCompacting, setIsCompacting] = useState(false)
   const [activeTools, setActiveTools] = useState<ToolCall[]>([])
+  const [subagents, setSubagents] = useState<SubagentInfo[]>([])
   const [error, setError] = useState<string | null>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
 
@@ -41,6 +52,7 @@ export function useAgentStream(): UseAgentStreamReturn {
     setIsStreaming(true)
     setIsCompacting(false)
     setActiveTools([])
+    setSubagents([])
     setError(null)
 
     // Create abort controller for cleanup
@@ -138,6 +150,50 @@ export function useAgentStream(): UseAgentStreamReturn {
           )
         )
         break
+      case 'subagent_spawn':
+        setSubagents((prev) => [
+          ...prev,
+          {
+            toolCallId: data.toolCallId,
+            taskId: null,
+            description: data.description,
+            tier: data.tier,
+            status: 'spawning',
+            outputLines: [],
+          },
+        ])
+        break
+      case 'subagent_result':
+        setSubagents((prev) =>
+          prev.map((subagent) =>
+            subagent.toolCallId === data.toolCallId
+              ? { ...subagent, taskId: data.taskId, status: data.status }
+              : subagent
+          )
+        )
+        break
+      case 'subagent_output':
+        setSubagents((prev) => {
+          // Find the most recent subagent (the one currently outputting)
+          if (prev.length === 0) return prev
+          const lastIndex = prev.length - 1
+          const updated = [...prev]
+          updated[lastIndex] = {
+            ...updated[lastIndex],
+            outputLines: data.lines,
+          }
+          return updated
+        })
+        break
+      case 'subagent_complete':
+        setSubagents((prev) =>
+          prev.map((subagent) =>
+            subagent.taskId === data.taskId
+              ? { ...subagent, status: data.success ? 'completed' : 'failed' }
+              : subagent
+          )
+        )
+        break
       case 'done':
         setStreamingText('')
         setActiveTools([])
@@ -161,6 +217,7 @@ export function useAgentStream(): UseAgentStreamReturn {
     isStreaming,
     isCompacting,
     activeTools,
+    subagents,
     error,
     sendAndStream,
   }
