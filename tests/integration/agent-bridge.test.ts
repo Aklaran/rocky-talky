@@ -10,6 +10,7 @@ function createMockSession() {
     subscribe: vi.fn(() => vi.fn()),
     prompt: vi.fn(async () => {}),
     dispose: vi.fn(),
+    bindExtensions: vi.fn(async () => {}),
     isStreaming: false,
     agent: {},
   }
@@ -60,6 +61,24 @@ describe('Agent Bridge Service', () => {
       expect(info.sessionId).toBe('test-1')
       expect(info.createdAt).toBeInstanceOf(Date)
       expect(sdk.createAgentSession).toHaveBeenCalledOnce()
+    })
+
+    it('calls bindExtensions after session creation for extension initialization', async () => {
+      await agentBridge.createSession('bind-ext-1')
+
+      expect(mockSession.bindExtensions).toHaveBeenCalledOnce()
+      expect(mockSession.bindExtensions).toHaveBeenCalledWith(
+        expect.objectContaining({
+          uiContext: expect.objectContaining({
+            ui: expect.objectContaining({
+              notify: expect.any(Function),
+              setStatus: expect.any(Function),
+              setWidget: expect.any(Function),
+              select: expect.any(Function),
+            }),
+          }),
+        }),
+      )
     })
 
     it('throws on duplicate session', async () => {

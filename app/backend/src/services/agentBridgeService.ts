@@ -176,6 +176,20 @@ export async function createSession(sessionId: string): Promise<AgentSessionInfo
       resourceLoader: loader,
     })
 
+    // Bind extensions to fire session_start event — required for extensions
+    // like Sirdar (orchestrator) that initialize internal state (e.g. agent pool)
+    // in their session_start handler.
+    await session.bindExtensions({
+      uiContext: {
+        ui: {
+          notify: (_msg: string, _level?: string) => {},
+          setStatus: (_key: string, _value: string | undefined) => {},
+          setWidget: (_key: string, _value: string[] | undefined) => {},
+          select: async (_title: string, _options: string[]) => undefined,
+        },
+      },
+    })
+
     const info: AgentSessionInfo = {
       sessionId,
       piSession: session,
