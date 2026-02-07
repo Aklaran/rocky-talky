@@ -19,10 +19,9 @@ import { Skeleton } from '@/components/ui/skeleton'
  */
 interface SessionViewProps {
   sessionId: string
-  onToggleSidebar?: () => void
 }
 
-export function SessionView({ sessionId, onToggleSidebar }: SessionViewProps) {
+export function SessionView({ sessionId }: SessionViewProps) {
   const utils = trpc.useUtils()
 
   const {
@@ -73,7 +72,7 @@ export function SessionView({ sessionId, onToggleSidebar }: SessionViewProps) {
 
   return (
     <div className="flex flex-1 flex-col">
-      <SessionHeader session={session} onToggleSidebar={onToggleSidebar} />
+      <SessionHeader session={session} />
       <MessageList messages={session.messages} />
       <MessageInput
         onSend={(content) =>

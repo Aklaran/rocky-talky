@@ -1,4 +1,4 @@
-import { useState, cloneElement, isValidElement } from 'react'
+import { useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { SessionList } from './SessionList'
 import { Button } from '@/components/ui/button'
@@ -6,6 +6,7 @@ import { Separator } from '@/components/ui/separator'
 import { Sheet, SheetContent } from '@/components/ui/sheet'
 import { Plus } from 'lucide-react'
 import { trpc } from '@/lib/trpc'
+import { SidebarContext } from '@/contexts/SidebarContext'
 import type { ReactNode } from 'react'
 
 /**
@@ -59,26 +60,25 @@ export function SessionLayout({ children }: { children: ReactNode }) {
   )
 
   return (
-    <div className="flex h-screen">
-      {/* Desktop Sidebar - Always visible on md+ */}
-      <div data-testid="sidebar" className="hidden md:flex w-72 flex-col border-r bg-muted/30">
-        {sidebarContent}
-      </div>
-
-      {/* Mobile Sidebar - Sheet overlay */}
-      <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
-        <SheetContent side="left" className="w-72 p-0 flex flex-col">
+    <SidebarContext.Provider value={{ toggleSidebar: () => setSidebarOpen(true) }}>
+      <div className="flex h-screen">
+        {/* Desktop Sidebar - Always visible on md+ */}
+        <div data-testid="sidebar" className="hidden md:flex w-72 flex-col border-r bg-muted/30">
           {sidebarContent}
-        </SheetContent>
-      </Sheet>
+        </div>
 
-      {/* Main content */}
-      <div className="flex flex-1 flex-col">
-        {/* Pass sidebar toggle function to children */}
-        {isValidElement(children)
-          ? cloneElement(children, { onToggleSidebar: () => setSidebarOpen(true) } as any)
-          : children}
+        {/* Mobile Sidebar - Sheet overlay */}
+        <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
+          <SheetContent side="left" className="w-72 p-0 flex flex-col">
+            {sidebarContent}
+          </SheetContent>
+        </Sheet>
+
+        {/* Main content */}
+        <div className="flex flex-1 flex-col">
+          {children}
+        </div>
       </div>
-    </div>
+    </SidebarContext.Provider>
   )
 }

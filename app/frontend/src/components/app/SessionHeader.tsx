@@ -13,6 +13,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
 import { Trash2, Menu } from 'lucide-react'
+import { useSidebar } from '@/contexts/SidebarContext'
 import type { SessionDetail } from '@shared/schemas/session'
 
 /**
@@ -21,10 +22,10 @@ import type { SessionDetail } from '@shared/schemas/session'
  */
 interface SessionHeaderProps {
   session: SessionDetail
-  onToggleSidebar?: () => void
 }
 
-export function SessionHeader({ session, onToggleSidebar }: SessionHeaderProps) {
+export function SessionHeader({ session }: SessionHeaderProps) {
+  const { toggleSidebar } = useSidebar()
   const navigate = useNavigate()
   const utils = trpc.useUtils()
 
@@ -39,18 +40,16 @@ export function SessionHeader({ session, onToggleSidebar }: SessionHeaderProps) 
     <div data-testid="session-header" className="flex items-center justify-between border-b px-4 py-3">
       <div className="flex items-center gap-2 flex-1 min-w-0">
         {/* Hamburger menu - only visible on mobile */}
-        {onToggleSidebar && (
-          <Button
+        <Button
             variant="ghost"
             size="icon"
-            onClick={onToggleSidebar}
+            onClick={toggleSidebar}
             title="Open menu"
             className="md:hidden min-h-[44px] min-w-[44px] shrink-0"
             data-testid="toggle-sidebar"
           >
             <Menu className="h-5 w-5" />
           </Button>
-        )}
         
         <div className="flex flex-col gap-1 min-w-0 flex-1">
           <h2 className="truncate text-base font-medium">
