@@ -44,7 +44,7 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 echo ""
 echo "Waiting for backend to be healthy..."
 for i in $(seq 1 30); do
-  if curl -sf http://localhost:3000/api/trpc/health.check > /dev/null 2>&1; then
+  if curl -sf http://localhost:7100/api/trpc/health.check > /dev/null 2>&1; then
     echo "✓ Backend healthy"
     break
   fi
@@ -57,16 +57,18 @@ for i in $(seq 1 30); do
 done
 
 # Ensure Tailscale Serve is proxying HTTPS → localhost:3000
-if ! tailscale serve status 2>/dev/null | grep -q "proxy http://127.0.0.1:3000"; then
+if ! tailscale serve status 2>/dev/null | grep -q "proxy http://127.0.0.1:7100"; then
   echo "Setting up Tailscale HTTPS proxy..."
-  sudo tailscale serve --bg 3000
+  # Remove old serve config if present, then set new port
+  sudo tailscale serve --https=443 off 2>/dev/null || true
+  sudo tailscale serve --bg 7100
 fi
 
 echo ""
 if [ -n "$TS_HOSTNAME" ]; then
   echo "🏔️  Basecamp running at https://${TS_HOSTNAME}"
 else
-  echo "🏔️  Basecamp running at http://${TS_IP}:3000"
+  echo "🏔️  Basecamp running at http://${TS_IP}:7100"
 fi
 echo ""
 echo "Logs:    docker compose -f docker-compose.yml -f docker-compose.prod.yml logs -f"

@@ -23,6 +23,9 @@ export const envSchema = z.object({
   // Only set when behind a reverse proxy. Omit for direct exposure (Tailscale).
   TRUST_PROXY: z.coerce.number().positive().optional(),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).optional(),
+  // Rate limit overrides (requests per window). Defaults: auth=15, api=100 in prod.
+  AUTH_RATE_LIMIT: z.coerce.number().positive().optional(),
+  API_RATE_LIMIT: z.coerce.number().positive().optional(),
 
   // --- AI ---
   // All optional — app works without AI, returns graceful fallback messages.

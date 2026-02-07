@@ -6,7 +6,7 @@ services:
       context: .
       dockerfile: docker/Dockerfile
     ports:
-      - '127.0.0.1:3000:3000'
+      - '127.0.0.1:7100:3000'
     environment:
       DATABASE_URL: postgresql://basecamp:${POSTGRES_PASSWORD:-basecamp_dev}@postgres:5432/basecamp
       SESSION_SECRET: ${SESSION_SECRET}

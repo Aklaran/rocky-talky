@@ -17,7 +17,20 @@ const env = getEnv()
 const app: Express = express()
 
 // Security headers (X-Frame-Options, X-Content-Type-Options, CSP, etc.)
-app.use(helmet())
+// Only add upgrade-insecure-requests when behind TLS (COOKIE_SECURE=true).
+// In dev/test/CI, requests are plain HTTP so upgrading would break asset loading.
+app.use(
+  helmet({
+    contentSecurityPolicy: env.COOKIE_SECURE
+      ? undefined // use helmet defaults (includes upgrade-insecure-requests)
+      : {
+          directives: {
+            ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+            'upgrade-insecure-requests': [],
+          },
+        },
+  }),
+)
 
 // HTTP request logging
 app.use(
@@ -56,10 +69,17 @@ app.use(createSessionMiddleware())
 const authLimiterStore = new MemoryStore()
 const apiLimiterStore = new MemoryStore()
 
+// Rate limits — configurable via env, with production defaults.
+// In dev/test, set high limits to avoid interference with E2E test
+// runs and hot-reloading dev servers. Integration tests override
+// via resetRateLimiters() + explicit request counts.
+const AUTH_RATE_LIMIT = env.AUTH_RATE_LIMIT ?? (env.NODE_ENV === 'production' ? 15 : 1000)
+const API_RATE_LIMIT = env.API_RATE_LIMIT ?? (env.NODE_ENV === 'production' ? 100 : 10000)
+
 // Rate limiting — auth endpoints (brute-force protection)
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15-minute window
-  max: 15, // 15 attempts per window
+  max: AUTH_RATE_LIMIT,
   standardHeaders: true,
   legacyHeaders: false,
   store: authLimiterStore,
@@ -71,7 +91,7 @@ app.use('/api/auth/register', authLimiter)
 // Rate limiting — general API (DoS protection)
 const apiLimiter = rateLimit({
   windowMs: 60 * 1000, // 1-minute window
-  max: 100, // 100 requests per minute
+  max: API_RATE_LIMIT,
   standardHeaders: true,
   legacyHeaders: false,
   store: apiLimiterStore,
