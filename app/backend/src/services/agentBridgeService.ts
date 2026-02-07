@@ -181,12 +181,27 @@ export async function createSession(sessionId: string): Promise<AgentSessionInfo
     // in their session_start handler.
     await session.bindExtensions({
       uiContext: {
-        ui: {
-          notify: (_msg: string, _level?: string) => {},
-          setStatus: (_key: string, _value: string | undefined) => {},
-          setWidget: (_key: string, _value: string[] | undefined) => {},
-          select: async (_title: string, _options: string[]) => undefined,
-        },
+        notify: (_msg: string, _level?: string) => {},
+        setStatus: (_key: string, _value: string | undefined) => {},
+        setWidget: (_key: string, _value: string[] | undefined) => {},
+        setFooter: (_key: string, _value: string | undefined) => {},
+        setHeader: (_key: string, _value: string | undefined) => {},
+        setTitle: (_value: string) => {},
+        setWorkingMessage: (_msg: string) => {},
+        select: async (_title: string, _options: string[]) => undefined,
+        confirm: async (_title: string) => false,
+        input: async (_title: string) => undefined,
+        custom: async () => undefined as never,
+        setEditorText: (_text: string) => {},
+        getEditorText: () => '',
+        editor: async () => undefined,
+        setEditorComponent: () => {},
+        get theme(): any { return {}; },
+        getAllThemes: () => [],
+        getTheme: () => undefined,
+        setTheme: () => ({ success: false, error: 'UI not available' }),
+        getToolsExpanded: () => false,
+        setToolsExpanded: () => {},
       },
     })
 
