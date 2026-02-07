@@ -82,6 +82,16 @@ export async function updateSubagentStatus(
 }
 
 /**
+ * Update a subagent's taskId (Sirdar agent task ID).
+ */
+export async function updateSubagentTaskId(id: string, taskId: string) {
+  return prisma.subagent.update({
+    where: { id },
+    data: { taskId },
+  })
+}
+
+/**
  * Append a message to a subagent.
  */
 export async function appendSubagentMessage(data: {

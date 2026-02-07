@@ -583,4 +583,240 @@ describe('SSE Streaming (/api/stream/generate)', () => {
       expect((errorEvents[0].data as { error: string }).error).toBe('Response too long')
     })
   })
+
+  // ===========================================================================
+  // Subagent Events
+  // ===========================================================================
+
+  describe('Subagent Events', () => {
+    it('streams subagent_spawn event and creates subagent in DB', async () => {
+      const session = await prisma.session.create({
+        data: { title: null },
+      })
+
+      await prisma.sessionMessage.create({
+        data: {
+          sessionId: session.id,
+          role: 'user',
+          content: 'Spawn a subagent',
+        },
+      })
+
+      const mockEvents: AgentEvent[] = [
+        { type: 'text', content: 'Spawning agent...' },
+        {
+          type: 'subagent_spawn',
+          toolCallId: 'call-1',
+          description: 'Test subagent task',
+          tier: 'standard',
+          prompt: 'Do something',
+        },
+        { type: 'text', content: 'Done!' },
+        { type: 'completion', fullText: 'Spawning agent...Done!' },
+      ]
+
+      mockGetSession.mockReturnValue(null)
+      mockCreateSession.mockResolvedValue({
+        sessionId: session.id,
+        piSession: {},
+        createdAt: new Date(),
+      })
+      mockSendMessage.mockReturnValue(mockAgentEventStream(mockEvents))
+
+      const res = await supertest(app)
+        .post('/api/stream/generate')
+        .send({ sessionId: session.id })
+        .expect(200)
+
+      const events = parseSSEEvents(res.text)
+      const spawnEvents = events.filter((e) => e.event === 'subagent_spawn')
+
+      expect(spawnEvents).toHaveLength(1)
+      expect(spawnEvents[0].data).toMatchObject({
+        toolCallId: 'call-1',
+        description: 'Test subagent task',
+        tier: 'standard',
+      })
+
+      // Verify subagent created in DB
+      const subagents = await prisma.subagent.findMany({
+        where: { sessionId: session.id },
+      })
+      expect(subagents).toHaveLength(1)
+      expect(subagents[0].description).toBe('Test subagent task')
+      expect(subagents[0].status).toBe('running')
+    })
+
+    it('streams subagent_result event and updates subagent with taskId', async () => {
+      const session = await prisma.session.create({
+        data: { title: null },
+      })
+
+      await prisma.sessionMessage.create({
+        data: {
+          sessionId: session.id,
+          role: 'user',
+          content: 'Spawn a subagent',
+        },
+      })
+
+      const mockEvents: AgentEvent[] = [
+        {
+          type: 'subagent_spawn',
+          toolCallId: 'call-1',
+          description: 'Test task',
+          tier: 'light',
+          prompt: 'Test',
+        },
+        {
+          type: 'subagent_result',
+          toolCallId: 'call-1',
+          taskId: 'task-abc-123',
+          status: 'running',
+        },
+        { type: 'completion', fullText: '' },
+      ]
+
+      mockGetSession.mockReturnValue(null)
+      mockCreateSession.mockResolvedValue({
+        sessionId: session.id,
+        piSession: {},
+        createdAt: new Date(),
+      })
+      mockSendMessage.mockReturnValue(mockAgentEventStream(mockEvents))
+
+      const res = await supertest(app)
+        .post('/api/stream/generate')
+        .send({ sessionId: session.id })
+        .expect(200)
+
+      const events = parseSSEEvents(res.text)
+      const resultEvents = events.filter((e) => e.event === 'subagent_result')
+
+      expect(resultEvents).toHaveLength(1)
+      expect(resultEvents[0].data).toMatchObject({
+        toolCallId: 'call-1',
+        taskId: 'task-abc-123',
+        status: 'running',
+      })
+
+      // Verify subagent was updated with taskId
+      const subagents = await prisma.subagent.findMany({
+        where: { sessionId: session.id },
+      })
+      expect(subagents).toHaveLength(1)
+      expect(subagents[0].taskId).toBe('task-abc-123')
+    })
+
+    it('streams subagent_complete event and updates subagent status', async () => {
+      const session = await prisma.session.create({
+        data: { title: null },
+      })
+
+      await prisma.sessionMessage.create({
+        data: {
+          sessionId: session.id,
+          role: 'user',
+          content: 'Spawn a subagent',
+        },
+      })
+
+      const mockEvents: AgentEvent[] = [
+        {
+          type: 'subagent_spawn',
+          toolCallId: 'call-1',
+          description: 'Test task',
+          tier: 'light',
+          prompt: 'Test',
+        },
+        {
+          type: 'subagent_result',
+          toolCallId: 'call-1',
+          taskId: 'task-complete-456',
+          status: 'running',
+        },
+        {
+          type: 'subagent_complete',
+          taskId: 'task-complete-456',
+          description: 'Test task',
+          success: true,
+        },
+        { type: 'completion', fullText: '' },
+      ]
+
+      mockGetSession.mockReturnValue(null)
+      mockCreateSession.mockResolvedValue({
+        sessionId: session.id,
+        piSession: {},
+        createdAt: new Date(),
+      })
+      mockSendMessage.mockReturnValue(mockAgentEventStream(mockEvents))
+
+      const res = await supertest(app)
+        .post('/api/stream/generate')
+        .send({ sessionId: session.id })
+        .expect(200)
+
+      const events = parseSSEEvents(res.text)
+      const completeEvents = events.filter((e) => e.event === 'subagent_complete')
+
+      expect(completeEvents).toHaveLength(1)
+      expect(completeEvents[0].data).toMatchObject({
+        taskId: 'task-complete-456',
+        description: 'Test task',
+        success: true,
+      })
+
+      // Verify subagent status was updated
+      const subagents = await prisma.subagent.findMany({
+        where: { sessionId: session.id },
+      })
+      expect(subagents).toHaveLength(1)
+      expect(subagents[0].status).toBe('completed')
+      expect(subagents[0].completedAt).toBeDefined()
+    })
+
+    it('streams subagent_output events without persisting', async () => {
+      const session = await prisma.session.create({
+        data: { title: null },
+      })
+
+      await prisma.sessionMessage.create({
+        data: {
+          sessionId: session.id,
+          role: 'user',
+          content: 'Spawn a subagent',
+        },
+      })
+
+      const mockEvents: AgentEvent[] = [
+        {
+          type: 'subagent_output',
+          lines: ['Output line 1', 'Output line 2'],
+        },
+        { type: 'completion', fullText: '' },
+      ]
+
+      mockGetSession.mockReturnValue(null)
+      mockCreateSession.mockResolvedValue({
+        sessionId: session.id,
+        piSession: {},
+        createdAt: new Date(),
+      })
+      mockSendMessage.mockReturnValue(mockAgentEventStream(mockEvents))
+
+      const res = await supertest(app)
+        .post('/api/stream/generate')
+        .send({ sessionId: session.id })
+        .expect(200)
+
+      const events = parseSSEEvents(res.text)
+      const outputEvents = events.filter((e) => e.event === 'subagent_output')
+
+      expect(outputEvents).toHaveLength(1)
+      expect(outputEvents[0].data).toMatchObject({
+        lines: ['Output line 1', 'Output line 2'],
+      })
+    })
+  })
 })

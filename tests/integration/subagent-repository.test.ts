@@ -247,4 +247,34 @@ describe('Subagent repository', () => {
       expect(messages).toHaveLength(2)
     })
   })
+
+  describe('updateSubagentTaskId', () => {
+    it('updates the taskId for a subagent', async () => {
+      const subagent = await subagentRepository.createSubagent({
+        sessionId,
+        description: 'Test',
+      })
+
+      expect(subagent.taskId).toBeNull()
+
+      const updated = await subagentRepository.updateSubagentTaskId(
+        subagent.id,
+        'task-xyz-123',
+      )
+
+      expect(updated.taskId).toBe('task-xyz-123')
+    })
+
+    it('can update taskId multiple times', async () => {
+      const subagent = await subagentRepository.createSubagent({
+        sessionId,
+        description: 'Test',
+      })
+
+      await subagentRepository.updateSubagentTaskId(subagent.id, 'task-1')
+      const updated = await subagentRepository.updateSubagentTaskId(subagent.id, 'task-2')
+
+      expect(updated.taskId).toBe('task-2')
+    })
+  })
 })
