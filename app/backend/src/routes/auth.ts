@@ -25,15 +25,22 @@ authRouter.post('/register', async (req: Request, res: Response): Promise<void> 
 
     const user = await registerUser(parsed.data)
 
-    // Set session — user is now logged in
-    req.session.userId = user.id
-    req.session.save((err) => {
-      if (err) {
-        logger.error({ err }, 'Session save failed after register')
+    // Regenerate session to prevent session fixation, then log in
+    req.session.regenerate((regenerateErr) => {
+      if (regenerateErr) {
+        logger.error({ err: regenerateErr }, 'Session regeneration failed after register')
         res.status(500).json({ error: 'Registration succeeded but session creation failed' })
         return
       }
-      res.status(201).json({ user })
+      req.session.userId = user.id
+      req.session.save((saveErr) => {
+        if (saveErr) {
+          logger.error({ err: saveErr }, 'Session save failed after register')
+          res.status(500).json({ error: 'Registration succeeded but session creation failed' })
+          return
+        }
+        res.status(201).json({ user })
+      })
     })
   } catch (err) {
     if (err instanceof AuthError && err.code === 'EMAIL_EXISTS') {
@@ -65,14 +72,22 @@ authRouter.post('/login', async (req: Request, res: Response): Promise<void> => 
 
     const user = await loginUser(parsed.data)
 
-    req.session.userId = user.id
-    req.session.save((err) => {
-      if (err) {
-        logger.error({ err }, 'Session save failed after login')
+    // Regenerate session to prevent session fixation, then log in
+    req.session.regenerate((regenerateErr) => {
+      if (regenerateErr) {
+        logger.error({ err: regenerateErr }, 'Session regeneration failed after login')
         res.status(500).json({ error: 'Login succeeded but session creation failed' })
         return
       }
-      res.status(200).json({ user })
+      req.session.userId = user.id
+      req.session.save((saveErr) => {
+        if (saveErr) {
+          logger.error({ err: saveErr }, 'Session save failed after login')
+          res.status(500).json({ error: 'Login succeeded but session creation failed' })
+          return
+        }
+        res.status(200).json({ user })
+      })
     })
   } catch (err) {
     if (err instanceof AuthError && err.code === 'INVALID_CREDENTIALS') {

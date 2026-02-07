@@ -19,6 +19,9 @@ export const envSchema = z.object({
     .enum(['true', 'false'])
     .optional()
     .transform((val) => val === 'true'),
+  // Trust proxy hops (for X-Forwarded-For behind nginx/caddy).
+  // Only set when behind a reverse proxy. Omit for direct exposure (Tailscale).
+  TRUST_PROXY: z.coerce.number().positive().optional(),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).optional(),
 
   // --- AI ---

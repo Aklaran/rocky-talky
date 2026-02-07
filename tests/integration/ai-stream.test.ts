@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest'
 import supertest from 'supertest'
-import { app } from '@backend/app'
+import { app, resetRateLimiters } from '@backend/app'
 import { resetDb, disconnectDb, prisma } from '../setup/db'
 import { createAuthenticatedCaller } from '../setup/trpc'
 import * as aiService from '@backend/services/aiService'
@@ -87,6 +87,7 @@ describe('AI Streaming (/api/chat/generate)', () => {
   beforeEach(async () => {
     await resetDb()
     aiService.resetProvider()
+    resetRateLimiters()
   })
 
   afterAll(async () => {

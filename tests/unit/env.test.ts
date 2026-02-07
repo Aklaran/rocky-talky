@@ -94,4 +94,37 @@ describe('Environment validation', () => {
     })
     expect(result.success).toBe(false)
   })
+
+  // Security audit: TRUST_PROXY
+  it('accepts valid TRUST_PROXY value', () => {
+    const result = envSchema.safeParse({
+      DATABASE_URL: 'postgresql://user:pass@localhost:5432/db',
+      SESSION_SECRET: 'a'.repeat(32),
+      TRUST_PROXY: '1',
+    })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.TRUST_PROXY).toBe(1)
+    }
+  })
+
+  it('TRUST_PROXY is optional (defaults to undefined)', () => {
+    const result = envSchema.safeParse({
+      DATABASE_URL: 'postgresql://user:pass@localhost:5432/db',
+      SESSION_SECRET: 'a'.repeat(32),
+    })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.TRUST_PROXY).toBeUndefined()
+    }
+  })
+
+  it('rejects non-positive TRUST_PROXY value', () => {
+    const result = envSchema.safeParse({
+      DATABASE_URL: 'postgresql://user:pass@localhost:5432/db',
+      SESSION_SECRET: 'a'.repeat(32),
+      TRUST_PROXY: '0',
+    })
+    expect(result.success).toBe(false)
+  })
 })

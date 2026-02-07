@@ -23,6 +23,7 @@ export function createSessionMiddleware(): RequestHandler {
     secret: env.SESSION_SECRET,
     resave: false,
     saveUninitialized: false, // Don't create session until something is stored
+    rolling: true, // Reset expiry on each request (idle timeout behavior)
     name: 'basecamp.sid',
     cookie: {
       // Secure cookies require HTTPS. Default: true in production.
@@ -30,7 +31,7 @@ export function createSessionMiddleware(): RequestHandler {
       secure: env.COOKIE_SECURE ?? env.NODE_ENV === 'production',
       httpOnly: true, // Not accessible via JS
       sameSite: 'lax', // CSRF protection — blocks cross-origin POST
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+      maxAge: 24 * 60 * 60 * 1000, // 24 hours (rolling — resets on each request)
     },
   })
 }

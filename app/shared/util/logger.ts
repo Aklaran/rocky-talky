@@ -27,13 +27,8 @@ const getTransport = () => {
     }
   }
 
-  return {
-    target: 'pino-pretty',
-    options: {
-      colorize: true,
-      destination: 1,
-    },
-  }
+  // Production: structured JSON logs (no pino-pretty) for log aggregation
+  return undefined
 }
 
 const options: LoggerOptions = {

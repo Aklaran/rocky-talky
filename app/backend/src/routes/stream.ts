@@ -32,6 +32,12 @@ const generateRequestSchema = z.object({
   conversationId: z.string().min(1),
 })
 
+/** Maximum time (ms) before a stream is forcibly terminated */
+const STREAM_TIMEOUT_MS = 120_000 // 2 minutes
+
+/** Maximum accumulated response length (characters) before cutting off */
+const MAX_RESPONSE_LENGTH = 100_000 // ~100k chars
+
 /**
  * POST /api/chat/generate
  * Stream an AI response for a conversation.
@@ -39,6 +45,10 @@ const generateRequestSchema = z.object({
  * Requires authentication (session cookie).
  * The conversation must belong to the authenticated user.
  * The last message in the conversation should be from the user.
+ *
+ * Safety limits:
+ * - 2-minute timeout (prevents hung connections / runaway costs)
+ * - 100k character cap (prevents unbounded token usage)
  */
 streamRouter.post('/generate', async (req: Request, res: Response): Promise<void> => {
   // --- Auth check ---
@@ -79,16 +89,32 @@ streamRouter.post('/generate', async (req: Request, res: Response): Promise<void
     aborted = true
   })
 
+  // Enforce a maximum stream duration
+  const timeout = setTimeout(() => {
+    if (!aborted) {
+      logger.warn({ conversationId }, 'AI stream timed out')
+      sendSSE(res, 'error', { error: 'Response timed out' })
+      aborted = true
+      res.end()
+    }
+  }, STREAM_TIMEOUT_MS)
+
   try {
     const stream = chatService.generateResponseStream(conversationId, user.id)
 
     let result = await stream.next()
+    let totalLength = 0
 
     while (!result.done) {
       if (aborted) {
         logger.debug({ conversationId }, 'Client disconnected during stream')
-        // Still try to finish reading the stream so the message gets saved
-        // But don't write to the response
+        break
+      }
+
+      totalLength += result.value.length
+      if (totalLength > MAX_RESPONSE_LENGTH) {
+        logger.warn({ conversationId, totalLength }, 'AI response exceeded max length')
+        sendSSE(res, 'error', { error: 'Response too long' })
         break
       }
 
@@ -112,6 +138,7 @@ streamRouter.post('/generate', async (req: Request, res: Response): Promise<void
       sendSSE(res, 'error', { error: 'Failed to generate response' })
     }
   } finally {
+    clearTimeout(timeout)
     if (!aborted) {
       res.end()
     }

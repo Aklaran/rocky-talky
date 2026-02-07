@@ -1,11 +1,12 @@
 import { describe, it, expect, beforeEach, afterAll } from 'vitest'
 import request from 'supertest'
-import { app } from '@backend/app'
+import { app, resetRateLimiters } from '@backend/app'
 import { resetDb, disconnectDb, prisma } from '../setup/db'
 
 describe('Auth routes', () => {
   beforeEach(async () => {
     await resetDb()
+    resetRateLimiters()
   })
 
   afterAll(async () => {

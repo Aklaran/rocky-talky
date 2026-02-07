@@ -2,7 +2,7 @@ import type { AIMessage, ChatOptions } from '@shared/schemas/ai'
 import { getEnv } from '../lib/env'
 import logger from '@shared/util/logger'
 import { OpenAIProvider } from './providers/openai'
-import { AnthropicProvider } from './providers/anthropic'
+import { AnthropicProvider, isAnthropicSDKInstalled } from './providers/anthropic'
 import { MockProvider } from './providers/mock'
 
 /**
@@ -70,6 +70,10 @@ export function getProvider(): AIProvider | null {
     case 'anthropic': {
       if (!env.ANTHROPIC_API_KEY) {
         logger.warn('AI_PROVIDER=anthropic but ANTHROPIC_API_KEY is not set')
+        return null
+      }
+      if (!isAnthropicSDKInstalled()) {
+        logger.warn('AI_PROVIDER=anthropic but @anthropic-ai/sdk is not installed. Run: pnpm add @anthropic-ai/sdk')
         return null
       }
       _provider = new AnthropicProvider(env.ANTHROPIC_API_KEY, env.AI_MODEL)
