@@ -92,6 +92,7 @@ model Subagent {
   id          String           @id @default(cuid())
   sessionId   String           @map("session_id")
   session     Session          @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  taskId      String?          @unique @map("task_id")
   description String
   status      SubagentStatus   @default(running)
   tier        String?
