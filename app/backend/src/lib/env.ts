@@ -1,4 +1,9 @@
+import dotenv from 'dotenv'
+import path from 'path'
 import { envSchema, Env } from '@shared/schemas/env'
+
+// Load .env from project root (two levels up from app/backend/src/lib/)
+dotenv.config({ path: path.resolve(__dirname, '../../../../.env') })
 
 let _env: Env | null = null
 

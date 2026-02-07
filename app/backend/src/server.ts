@@ -31,5 +31,5 @@ if (fs.existsSync(staticPath)) {
 
 // Start server
 app.listen(env.PORT, () => {
-  logger.info(`🏔️  Basecamp running on port ${env.PORT}`)
+  logger.info(`🗣️  Rocky Talky running on port ${env.PORT}`)
 })
