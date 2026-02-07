@@ -2,10 +2,13 @@ import { trpc } from '@/lib/trpc'
 import { MessageList } from './MessageList'
 import { MessageInput } from './MessageInput'
 import { SessionHeader } from './SessionHeader'
+import { SubagentPanel } from './SubagentPanel'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useAgentStream } from '@/lib/useAgentStream'
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import { toast } from 'sonner'
+import type { SubagentInfo } from '@/lib/useAgentStream'
+import type { SubagentOutput } from '@shared/schemas/session'
 
 /**
  * SessionView — displays a single session with its messages and input.
@@ -40,6 +43,7 @@ export function SessionView({ sessionId }: SessionViewProps) {
     isStreaming,
     isCompacting,
     activeTools,
+    subagents: liveSubagents,
     error: streamError,
     sendAndStream,
   } = useAgentStream()
@@ -71,6 +75,22 @@ export function SessionView({ sessionId }: SessionViewProps) {
       })
     }
   }, [streamError])
+
+  // Convert historical subagents to SubagentInfo format
+  const historicalSubagents = useMemo(() => {
+    if (!session?.subagents) return []
+    return session.subagents.map((sub): SubagentInfo => ({
+      toolCallId: sub.id,
+      taskId: sub.taskId,
+      description: sub.description,
+      tier: sub.tier || 'unknown',
+      status: sub.status as SubagentInfo['status'],
+      outputLines: sub.output ? [sub.output] : [],
+    }))
+  }, [session?.subagents])
+
+  // Show live subagents during streaming, historical ones otherwise
+  const displaySubagents = isStreaming ? liveSubagents : historicalSubagents
 
   if (isLoading) {
     return (
@@ -113,6 +133,7 @@ export function SessionView({ sessionId }: SessionViewProps) {
         isCompacting={isCompacting}
         activeTools={activeTools}
       />
+      <SubagentPanel subagents={displaySubagents} />
       <MessageInput
         onSend={(content) =>
           sendMessage.mutate({ sessionId, content })
