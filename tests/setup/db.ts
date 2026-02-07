@@ -10,9 +10,16 @@ import { prisma } from '@backend/lib/clients/prisma'
  * Order matters: delete children before parents (foreign keys).
  */
 export async function resetDb() {
+  // Old template models
   await prisma.message.deleteMany()
   await prisma.conversation.deleteMany()
   await prisma.user.deleteMany()
+
+  // Rocky Talky models
+  await prisma.subagentMessage.deleteMany()
+  await prisma.subagent.deleteMany()
+  await prisma.sessionMessage.deleteMany()
+  await prisma.session.deleteMany()
 }
 
 /**

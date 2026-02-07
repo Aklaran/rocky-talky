@@ -108,6 +108,8 @@ export function resetRateLimiters(): void {
 }
 
 // Auth routes (REST — not tRPC)
+// NOTE (Rocky Talky): Auth routes kept from template but unused.
+// Rocky Talky is single-user, authenticated via Tailscale network access.
 app.use('/api/auth', authRouter)
 
 // AI streaming route (REST SSE — not tRPC)

@@ -14,7 +14,7 @@ COPY . .
 RUN cd app/backend && pnpm generate
 RUN pnpm build
 
-# Stage 3: Production runtime
+# Stage 3: Production runtime (Rocky Talky)
 FROM node:22-alpine AS runner
 WORKDIR /app
 
@@ -31,7 +31,7 @@ COPY --from=builder /app/package.json .
 
 EXPOSE 3000
 
-# The compiled server.ts lives at app/backend/dist/backend/src/server.js
+# Rocky Talky: The compiled server.ts lives at app/backend/dist/backend/src/server.js
 # It looks for frontend at ../../frontend/dist relative to __dirname (app/backend/dist/backend/src)
 # That resolves to app/frontend/dist — which is where we copied it above
 CMD ["sh", "-c", "cd app/backend && npx prisma migrate deploy && cd /app && node app/backend/dist/backend/src/server.js"]

@@ -6,6 +6,10 @@ const trpc = initTRPC.context<Context>().create()
 /**
  * Auth middleware — rejects unauthenticated requests.
  * Used by protectedProcedure.
+ *
+ * NOTE (Rocky Talky): This auth middleware is kept from the template but unused.
+ * Rocky Talky is single-user — if you can reach it over Tailscale, you're authenticated.
+ * Session routes use publicProcedure instead.
  */
 const isAuthenticated = trpc.middleware(async ({ ctx, next }) => {
   if (!ctx.user) {

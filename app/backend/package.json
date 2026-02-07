@@ -1,5 +1,5 @@
 {
-  "name": "@basecamp/backend",
+  "name": "@rocky-talky/backend",
   "version": "0.0.0",
   "private": true,
   "scripts": {
@@ -16,7 +16,7 @@
     "seed": "tsx prisma/seed/seed.ts"
   },
   "dependencies": {
-    "@prisma/client": "^6.0.0",
+    "@prisma/client": "6.19.2",
     "@trpc/server": "^11.0.0",
     "argon2": "^0.44.0",
     "connect-pg-simple": "^10.0.0",
@@ -37,7 +37,7 @@
     "@types/express-rate-limit": "^6.0.2",
     "@types/express-session": "^1.18.0",
     "@types/node": "^22.0.0",
-    "prisma": "^6.0.0",
+    "prisma": "6.19.2",
     "tsc-alias": "^1.8.16",
     "tsconfig-paths": "^4.2.0",
     "tsx": "^4.0.0",

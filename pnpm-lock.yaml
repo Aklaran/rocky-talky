@@ -49,7 +49,7 @@ importers:
   app/backend:
     dependencies:
       '@prisma/client':
-        specifier: ^6.0.0
+        specifier: 6.19.2
         version: 6.19.2(prisma@6.19.2(typescript@5.9.3))(typescript@5.9.3)
       '@trpc/server':
         specifier: ^11.0.0
@@ -107,7 +107,7 @@ importers:
         specifier: ^22.0.0
         version: 22.19.9
       prisma:
-        specifier: ^6.0.0
+        specifier: 6.19.2
         version: 6.19.2(typescript@5.9.3)
       tsc-alias:
         specifier: ^1.8.16

@@ -11,6 +11,8 @@ datasource db {
 // Auth (Phase 2)
 // =============================================================================
 
+// NOTE (Rocky Talky): User model kept from template but unused.
+// Rocky Talky is single-user, authenticated via Tailscale network access.
 model User {
   id            String         @id @default(cuid())
   email         String         @unique
@@ -26,7 +28,7 @@ model User {
 // Created via its own DDL in the session setup module.
 
 // =============================================================================
-// Chat (Phase 3)
+// Chat (Phase 3 — Template code, kept for reference)
 // =============================================================================
 
 model Conversation {
@@ -54,8 +56,81 @@ model Message {
   @@map("messages")
 }
 
+// =============================================================================
+// Rocky Talky — Session Models
+// =============================================================================
+
+model Session {
+  id              String        @id @default(cuid())
+  title           String?
+  tags            String[]      @default([])
+  status          SessionStatus @default(active)
+  modelUsed       String        @default("claude-opus-4-20250609") @map("model_used")
+  tokensUsed      Int           @default(0) @map("tokens_used")
+  compactionCount Int           @default(0) @map("compaction_count")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+  messages        SessionMessage[]
+  subagents       Subagent[]
+
+  @@map("sessions")
+}
+
+model SessionMessage {
+  id        String      @id @default(cuid())
+  sessionId String      @map("session_id")
+  session   Session     @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  role      MessageRole
+  content   String
+  createdAt DateTime    @default(now()) @map("created_at")
+
+  @@index([sessionId])
+  @@map("session_messages")
+}
+
+model Subagent {
+  id          String           @id @default(cuid())
+  sessionId   String           @map("session_id")
+  session     Session          @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  description String
+  status      SubagentStatus   @default(running)
+  tier        String?
+  output      String?
+  createdAt   DateTime         @default(now()) @map("created_at")
+  completedAt DateTime?        @map("completed_at")
+  messages    SubagentMessage[]
+
+  @@index([sessionId])
+  @@map("subagents")
+}
+
+model SubagentMessage {
+  id         String      @id @default(cuid())
+  subagentId String      @map("subagent_id")
+  subagent   Subagent    @relation(fields: [subagentId], references: [id], onDelete: Cascade)
+  role       MessageRole
+  content    String
+  createdAt  DateTime    @default(now()) @map("created_at")
+
+  @@index([subagentId])
+  @@map("subagent_messages")
+}
+
+enum SessionStatus {
+  active
+  completed
+  abandoned
+}
+
+enum SubagentStatus {
+  running
+  completed
+  failed
+}
+
 enum MessageRole {
   system
   user
   assistant
+  tool
 }
