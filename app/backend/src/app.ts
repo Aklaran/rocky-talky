@@ -17,7 +17,18 @@ const env = getEnv()
 const app: Express = express()
 
 // Security headers (X-Frame-Options, X-Content-Type-Options, CSP, etc.)
-app.use(helmet())
+// Disable upgrade-insecure-requests — Tailscale deployment runs on plain HTTP.
+// Re-enable if serving behind TLS termination.
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+        'upgrade-insecure-requests': [],
+      },
+    },
+  }),
+)
 
 // HTTP request logging
 app.use(
