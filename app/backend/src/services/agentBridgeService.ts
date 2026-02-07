@@ -215,6 +215,7 @@ export async function createSession(sessionId: string): Promise<AgentSessionInfo
     await session.bindExtensions({
       uiContext: {
         notify: (msg: string, _level?: string) => {
+          logger.info({ sessionId, msg }, 'notify() callback fired')
           // Parse Sirdar agent completion notifications
           // Format: "Agent task-xyz completed: description" or "Agent task-xyz failed: description"
           const completedMatch = msg.match(/Agent (task-[^\s]+) completed: (.+)/)
