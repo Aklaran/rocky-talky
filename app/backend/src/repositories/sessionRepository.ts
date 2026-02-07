@@ -128,6 +128,17 @@ export async function addMessage(sessionId: string, role: MessageRole, content: 
 }
 
 /**
+ * Update an existing message's content.
+ * Used for incremental saves during streaming.
+ */
+export async function updateMessageContent(messageId: string, content: string) {
+  return prisma.sessionMessage.update({
+    where: { id: messageId },
+    data: { content },
+  })
+}
+
+/**
  * Get all messages for a session, ordered chronologically.
  */
 export async function getMessages(sessionId: string) {

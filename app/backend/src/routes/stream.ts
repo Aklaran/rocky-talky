@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express'
 import { z } from 'zod'
 import * as agentBridgeService from '../services/agentBridgeService'
 import * as sessionService from '../services/sessionService'
+import * as sessionRepo from '../repositories/sessionRepository'
 import logger from '@shared/util/logger'
 
 /**
@@ -19,9 +20,14 @@ import logger from '@shared/util/logger'
  * 3. Server gets the latest user message from the session
  * 4. Server sends message to Pi agent via agentBridgeService
  * 5. Server streams AI response as SSE events
- * 6. On completion, saves assistant message to DB
+ * 6. **Incrementally saves** assistant message to DB during streaming
  * 7. Sends final "done" event with saved message
  * 8. Auto-titles session after first AI response if untitled
+ *
+ * Incremental save strategy:
+ * - Create the assistant message in DB on first text chunk
+ * - Update it periodically (every ~500ms or on completion)
+ * - On crash/restart, partial response is preserved in DB
  *
  * Event types:
  *   event: text       — { content: "delta text" }
@@ -44,6 +50,9 @@ const STREAM_TIMEOUT_MS = 300_000 // 5 minutes (Pi agents can run longer)
 
 /** Maximum accumulated response length (characters) before cutting off */
 const MAX_RESPONSE_LENGTH = 100_000 // ~100k chars
+
+/** How often to flush accumulated text to the database (ms) */
+const DB_FLUSH_INTERVAL_MS = 500
 
 /**
  * POST /api/stream/generate
@@ -107,6 +116,38 @@ streamRouter.post('/generate', async (req: Request, res: Response): Promise<void
   }, STREAM_TIMEOUT_MS)
 
   let fullText = ''
+  let assistantMessageId: string | null = null
+  let lastFlushTime = 0
+  let lastFlushedLength = 0
+
+  /**
+   * Flush accumulated text to the database.
+   * Creates the message on first call, updates on subsequent calls.
+   */
+  async function flushToDb(): Promise<void> {
+    if (!fullText) return
+
+    try {
+      if (!assistantMessageId) {
+        // First flush — create the message
+        const saved = await sessionService.sendMessage({
+          sessionId,
+          content: fullText,
+          role: 'assistant',
+        })
+        assistantMessageId = saved.id
+        lastFlushedLength = fullText.length
+        logger.debug({ sessionId, messageId: assistantMessageId }, 'Created assistant message (incremental)')
+      } else if (fullText.length > lastFlushedLength) {
+        // Subsequent flush — update content
+        await sessionRepo.updateMessageContent(assistantMessageId, fullText)
+        lastFlushedLength = fullText.length
+      }
+      lastFlushTime = Date.now()
+    } catch (err) {
+      logger.error({ err, sessionId }, 'Failed to flush assistant message to DB')
+    }
+  }
 
   try {
     // --- Get or create Pi agent session ---
@@ -135,9 +176,18 @@ streamRouter.post('/generate', async (req: Request, res: Response): Promise<void
             break
           }
           sendSSE(res, 'text', { content: event.content })
+
+          // Periodically flush to DB
+          if (Date.now() - lastFlushTime >= DB_FLUSH_INTERVAL_MS) {
+            await flushToDb()
+          }
           break
 
         case 'tool_start':
+          // Flush text before tool execution (tools can take a while)
+          if (fullText.length > lastFlushedLength) {
+            await flushToDb()
+          }
           sendSSE(res, 'tool_start', {
             toolCallId: event.toolCallId,
             toolName: event.toolName,
@@ -172,13 +222,16 @@ streamRouter.post('/generate', async (req: Request, res: Response): Promise<void
       if (aborted) break
     }
 
-    // --- Save assistant message ---
-    if (!aborted && fullText) {
-      const savedMessage = await sessionService.sendMessage({
-        sessionId,
-        content: fullText,
-        role: 'assistant',
-      })
+    // --- Final flush — save any remaining text ---
+    if (fullText) {
+      await flushToDb()
+    }
+
+    // --- Send done event ---
+    if (assistantMessageId && !aborted) {
+      // Fetch the saved message for the done event
+      const savedSession = await sessionService.getSession(sessionId)
+      const savedMessage = savedSession.messages.find((m) => m.id === assistantMessageId)
 
       // --- Auto-title session after first AI response ---
       if (!session.title) {
@@ -187,16 +240,32 @@ streamRouter.post('/generate', async (req: Request, res: Response): Promise<void
         logger.debug({ sessionId, title: autoTitle }, 'Auto-titled session')
       }
 
-      sendSSE(res, 'done', { message: savedMessage })
+      if (savedMessage) {
+        sendSSE(res, 'done', { message: savedMessage })
+      }
       logger.info({ sessionId, responseLength: fullText.length }, 'AI response completed')
     }
   } catch (err: unknown) {
     logger.error({ err, sessionId }, 'AI stream error')
+
+    // Even on error, flush whatever we have so the partial response is preserved
+    if (fullText && fullText.length > lastFlushedLength) {
+      await flushToDb()
+      logger.info({ sessionId, savedLength: fullText.length }, 'Saved partial response before error')
+    }
+
     if (!aborted) {
       sendSSE(res, 'error', { error: 'Failed to generate response' })
     }
   } finally {
     clearTimeout(timeout)
+
+    // Final safety flush — if aborted mid-stream, save what we have
+    if (fullText && fullText.length > lastFlushedLength) {
+      await flushToDb()
+      logger.info({ sessionId, savedLength: fullText.length }, 'Saved partial response on cleanup')
+    }
+
     res.end()
   }
 })
