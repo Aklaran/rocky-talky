@@ -34,9 +34,9 @@ export default defineConfig({
       cwd: __dirname,
       url: 'http://localhost:3000/api/trpc/health.check',
       reuseExistingServer: !process.env.CI,
-      timeout: 30000,
+      timeout: 120000,
       env: {
-        DATABASE_URL: 'postgresql://basecamp:basecamp_dev@localhost:5432/basecamp_test',
+        DATABASE_URL: 'postgresql://basecamp:basecamp_test@localhost:5432/basecamp',
         SESSION_SECRET: 'test-secret-that-is-at-least-32-characters-long-for-tests',
         AI_PROVIDER: 'mock',
         AI_MODEL: 'mock-model',
@@ -49,7 +49,7 @@ export default defineConfig({
       cwd: __dirname,
       url: 'http://localhost:5173',
       reuseExistingServer: !process.env.CI,
-      timeout: 30000,
+      timeout: 120000,
     },
   ],
 })
