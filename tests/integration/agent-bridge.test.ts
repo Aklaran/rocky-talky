@@ -242,5 +242,92 @@ describe('Agent Bridge Service', () => {
       expect(errorEvent).toBeDefined()
       expect(errorEvent.error).toContain('API rate limit')
     })
+
+    it('handles auto-compaction events', async () => {
+      mockSession.subscribe.mockImplementation((listener: any) => {
+        setTimeout(() => {
+          listener({ type: 'agent_start' })
+          listener({
+            type: 'message_update',
+            assistantMessageEvent: { type: 'text_delta', delta: 'Processing...' },
+          })
+          listener({
+            type: 'auto_compaction_start',
+            reason: 'threshold',
+          })
+          listener({
+            type: 'auto_compaction_end',
+            aborted: false,
+            result: {},
+          })
+          listener({
+            type: 'message_update',
+            assistantMessageEvent: { type: 'text_delta', delta: 'Done!' },
+          })
+          listener({ type: 'agent_end', messages: [] })
+        }, 10)
+        return vi.fn()
+      })
+
+      mockSession.prompt.mockImplementation(async () => {
+        await new Promise((r) => setTimeout(r, 50))
+      })
+
+      await agentBridge.createSession('compact-1')
+      const events: agentBridge.AgentEvent[] = []
+
+      for await (const event of agentBridge.sendMessage('compact-1', 'test')) {
+        events.push(event)
+      }
+
+      const compactionStart = events.find(
+        (e) => e.type === 'compaction_start',
+      ) as agentBridge.AgentEventCompactionStart
+      expect(compactionStart).toBeDefined()
+      expect(compactionStart.reason).toBe('threshold')
+
+      const compactionEnd = events.find(
+        (e) => e.type === 'compaction_end',
+      ) as agentBridge.AgentEventCompactionEnd
+      expect(compactionEnd).toBeDefined()
+      expect(compactionEnd.aborted).toBe(false)
+    })
+
+    it('handles auto-compaction errors', async () => {
+      mockSession.subscribe.mockImplementation((listener: any) => {
+        setTimeout(() => {
+          listener({ type: 'agent_start' })
+          listener({
+            type: 'auto_compaction_start',
+            reason: 'overflow',
+          })
+          listener({
+            type: 'auto_compaction_end',
+            aborted: true,
+            errorMessage: 'Compaction timeout',
+          })
+          listener({ type: 'agent_end', messages: [] })
+        }, 10)
+        return vi.fn()
+      })
+
+      mockSession.prompt.mockImplementation(async () => {
+        await new Promise((r) => setTimeout(r, 50))
+      })
+
+      await agentBridge.createSession('compact-err-1')
+      const events: agentBridge.AgentEvent[] = []
+
+      for await (const event of agentBridge.sendMessage('compact-err-1', 'test')) {
+        events.push(event)
+      }
+
+      const compactionEnd = events.find(
+        (e) => e.type === 'compaction_end',
+      ) as agentBridge.AgentEventCompactionEnd
+      expect(compactionEnd).toBeDefined()
+      expect(compactionEnd.aborted).toBe(true)
+      expect(compactionEnd.error).toBe('Compaction timeout')
+    })
   })
 })

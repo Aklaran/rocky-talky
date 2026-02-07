@@ -38,6 +38,7 @@ export function SessionView({ sessionId }: SessionViewProps) {
   const {
     streamingText,
     isStreaming,
+    isCompacting,
     activeTools,
     error: streamError,
     sendAndStream,
@@ -109,6 +110,7 @@ export function SessionView({ sessionId }: SessionViewProps) {
         messages={session.messages}
         streamingContent={streamingText}
         isStreaming={isStreaming}
+        isCompacting={isCompacting}
         activeTools={activeTools}
       />
       <MessageInput

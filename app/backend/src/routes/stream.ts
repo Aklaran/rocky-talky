@@ -213,6 +213,19 @@ streamRouter.post('/generate', async (req: Request, res: Response): Promise<void
           aborted = true
           break
 
+        case 'compaction_start':
+          sendSSE(res, 'compaction_start', { reason: event.reason })
+          break
+
+        case 'compaction_end':
+          sendSSE(res, 'compaction_end', {
+            aborted: event.aborted,
+            ...(event.error && { error: event.error }),
+          })
+          // Increment compaction count in the database
+          await sessionRepo.incrementCompactionCount(sessionId)
+          break
+
         case 'agent_start':
         case 'agent_end':
           // These events are internal; don't send to client

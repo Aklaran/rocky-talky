@@ -54,6 +54,17 @@ export interface AgentEventAgentEnd {
   type: 'agent_end'
 }
 
+export interface AgentEventCompactionStart {
+  type: 'compaction_start'
+  reason: string
+}
+
+export interface AgentEventCompactionEnd {
+  type: 'compaction_end'
+  aborted: boolean
+  error?: string
+}
+
 export type AgentEvent =
   | AgentEventText
   | AgentEventToolStart
@@ -62,6 +73,8 @@ export type AgentEvent =
   | AgentEventError
   | AgentEventAgentStart
   | AgentEventAgentEnd
+  | AgentEventCompactionStart
+  | AgentEventCompactionEnd
 
 // We store the Pi session as `any` since the type comes from a dynamic import
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -264,6 +277,21 @@ export async function* sendMessage(
           resolve()
           resolve = null
         }
+        break
+
+      case 'auto_compaction_start':
+        pushEvent({
+          type: 'compaction_start',
+          reason: event.reason || 'unknown',
+        })
+        break
+
+      case 'auto_compaction_end':
+        pushEvent({
+          type: 'compaction_end',
+          aborted: event.aborted || false,
+          error: event.errorMessage,
+        })
         break
     }
   })

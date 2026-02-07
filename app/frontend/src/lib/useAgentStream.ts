@@ -21,6 +21,7 @@ export interface ToolCall {
 export interface UseAgentStreamReturn {
   streamingText: string
   isStreaming: boolean
+  isCompacting: boolean
   activeTools: ToolCall[]
   error: string | null
   sendAndStream: (sessionId: string) => Promise<void>
@@ -29,6 +30,7 @@ export interface UseAgentStreamReturn {
 export function useAgentStream(): UseAgentStreamReturn {
   const [streamingText, setStreamingText] = useState('')
   const [isStreaming, setIsStreaming] = useState(false)
+  const [isCompacting, setIsCompacting] = useState(false)
   const [activeTools, setActiveTools] = useState<ToolCall[]>([])
   const [error, setError] = useState<string | null>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
@@ -37,6 +39,7 @@ export function useAgentStream(): UseAgentStreamReturn {
     // Reset state
     setStreamingText('')
     setIsStreaming(true)
+    setIsCompacting(false)
     setActiveTools([])
     setError(null)
 
@@ -144,12 +147,19 @@ export function useAgentStream(): UseAgentStreamReturn {
         setError(data.error)
         setIsStreaming(false)
         break
+      case 'compaction_start':
+        setIsCompacting(true)
+        break
+      case 'compaction_end':
+        setIsCompacting(false)
+        break
     }
   }
 
   return {
     streamingText,
     isStreaming,
+    isCompacting,
     activeTools,
     error,
     sendAndStream,

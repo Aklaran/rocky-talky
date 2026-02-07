@@ -17,11 +17,13 @@ import type { ToolCall } from '@/lib/useAgentStream'
  * - Auto-scrolls to bottom on new messages
  * - Role icons for visual distinction
  * - Supports streaming messages with markdown rendering
+ * - Shows compaction indicator when context is being compacted
  */
 interface MessageListProps {
   messages: MessageOutput[]
   streamingContent?: string
   isStreaming?: boolean
+  isCompacting?: boolean
   activeTools?: ToolCall[]
 }
 
@@ -29,6 +31,7 @@ export function MessageList({
   messages, 
   streamingContent, 
   isStreaming,
+  isCompacting = false,
   activeTools = [],
 }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null)
@@ -70,6 +73,16 @@ export function MessageList({
             <div className="max-w-[80%] md:max-w-[75%] rounded-lg px-4 py-2.5 bg-muted text-foreground">
               <MarkdownMessage content={streamingContent} isStreaming />
               <ToolCallIndicator tools={activeTools} />
+            </div>
+          </div>
+        )}
+
+        {/* Compaction indicator */}
+        {isCompacting && (
+          <div className="flex justify-center" data-testid="compaction-indicator">
+            <div className="inline-flex items-center gap-2 rounded-full bg-muted/50 px-3 py-1.5 text-xs text-muted-foreground">
+              <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-muted-foreground" />
+              Compacting context…
             </div>
           </div>
         )}

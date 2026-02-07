@@ -161,3 +161,14 @@ export async function getLastUserMessage(sessionId: string) {
     orderBy: { createdAt: 'desc' },
   })
 }
+
+/**
+ * Increment the compaction count for a session.
+ * Used when Pi SDK auto-compaction occurs.
+ */
+export async function incrementCompactionCount(sessionId: string) {
+  return prisma.session.update({
+    where: { id: sessionId },
+    data: { compactionCount: { increment: 1 } },
+  })
+}
