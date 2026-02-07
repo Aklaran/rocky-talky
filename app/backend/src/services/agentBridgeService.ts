@@ -243,6 +243,7 @@ export async function createSession(sessionId: string): Promise<AgentSessionInfo
                 if (subagent) {
                   return subagentRepo.updateSubagentStatus(subagent.id, 'completed')
                 }
+                return undefined
               })
               .catch(err => {
                 logger.error({ err, taskId }, 'Failed to persist subagent completion in notify()')
@@ -267,6 +268,7 @@ export async function createSession(sessionId: string): Promise<AgentSessionInfo
                 if (subagent) {
                   return subagentRepo.updateSubagentStatus(subagent.id, 'failed')
                 }
+                return undefined
               })
               .catch(err => {
                 logger.error({ err, taskId }, 'Failed to persist subagent failure in notify()')
