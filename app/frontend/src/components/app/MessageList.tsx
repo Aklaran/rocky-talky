@@ -3,6 +3,9 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/utils'
 import { Bot, User, Wrench } from 'lucide-react'
 import type { MessageOutput } from '@shared/schemas/session'
+import { MarkdownMessage } from './MarkdownMessage'
+import { ToolCallIndicator } from './ToolCallIndicator'
+import type { ToolCall } from '@/lib/useAgentStream'
 
 /**
  * Message list — displays session messages with auto-scroll.
@@ -13,18 +16,27 @@ import type { MessageOutput } from '@shared/schemas/session'
  * - Tool messages shown with monospace font and distinct styling
  * - Auto-scrolls to bottom on new messages
  * - Role icons for visual distinction
+ * - Supports streaming messages with markdown rendering
  */
 interface MessageListProps {
   messages: MessageOutput[]
+  streamingContent?: string
+  isStreaming?: boolean
+  activeTools?: ToolCall[]
 }
 
-export function MessageList({ messages }: MessageListProps) {
+export function MessageList({ 
+  messages, 
+  streamingContent, 
+  isStreaming,
+  activeTools = [],
+}: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null)
 
-  // Auto-scroll to bottom when messages change
+  // Auto-scroll to bottom when messages change or streaming updates
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
+  }, [messages, streamingContent])
 
   if (messages.length === 0) {
     return (
@@ -45,6 +57,22 @@ export function MessageList({ messages }: MessageListProps) {
         {messages.map((message) => (
           <MessageBubble key={message.id} message={message} />
         ))}
+
+        {/* Streaming assistant message */}
+        {isStreaming && streamingContent && (
+          <div className="flex gap-3" data-testid="message-streaming">
+            {/* Avatar */}
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
+              <Bot className="h-4 w-4" />
+            </div>
+
+            {/* Streaming content */}
+            <div className="max-w-[85%] md:max-w-[80%] rounded-lg px-4 py-2.5 bg-muted text-foreground">
+              <MarkdownMessage content={streamingContent} isStreaming />
+              <ToolCallIndicator tools={activeTools} />
+            </div>
+          </div>
+        )}
 
         <div ref={bottomRef} />
       </div>
@@ -114,9 +142,13 @@ function MessageBubble({ message }: { message: MessageOutput }) {
             : 'bg-muted text-foreground',
         )}
       >
-        <p className="whitespace-pre-wrap text-sm leading-relaxed">
-          {message.content}
-        </p>
+        {isUser ? (
+          <p className="whitespace-pre-wrap text-sm leading-relaxed">
+            {message.content}
+          </p>
+        ) : (
+          <MarkdownMessage content={message.content} />
+        )}
       </div>
     </div>
   )
