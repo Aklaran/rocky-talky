@@ -15,6 +15,16 @@ export default defineConfig({
     {
       name: 'chromium',
       use: { browserName: 'chromium' },
+      grepInvert: /@mobile/,
+    },
+    {
+      name: 'mobile',
+      use: {
+        browserName: 'chromium',
+        viewport: { width: 375, height: 812 },
+        isMobile: true,
+      },
+      grep: /@mobile/,
     },
   ],
   // Start dev servers before running e2e tests
