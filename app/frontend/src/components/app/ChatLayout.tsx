@@ -33,7 +33,7 @@ export function ChatLayout({ children }: { children: ReactNode }) {
   return (
     <div className="flex h-screen">
       {/* Sidebar */}
-      <div className="flex w-72 flex-col border-r bg-muted/30">
+      <div data-testid="sidebar" className="flex w-72 flex-col border-r bg-muted/30">
         {/* Sidebar header */}
         <div className="flex items-center justify-between p-4">
           <h1 className="text-lg font-semibold">🏔️ Basecamp</h1>
@@ -43,6 +43,7 @@ export function ChatLayout({ children }: { children: ReactNode }) {
             onClick={() => createConversation.mutate({})}
             disabled={createConversation.isPending}
             title="New conversation"
+            data-testid="new-conversation"
           >
             <Plus className="h-4 w-4" />
           </Button>
@@ -59,7 +60,7 @@ export function ChatLayout({ children }: { children: ReactNode }) {
 
         {/* User footer */}
         <div className="flex items-center justify-between p-3">
-          <span className="truncate text-sm text-muted-foreground">
+          <span data-testid="user-email" className="truncate text-sm text-muted-foreground">
             {user?.email}
           </span>
           <Button
@@ -67,6 +68,7 @@ export function ChatLayout({ children }: { children: ReactNode }) {
             size="icon"
             onClick={handleLogout}
             title="Sign out"
+            data-testid="sign-out"
           >
             <LogOut className="h-4 w-4" />
           </Button>

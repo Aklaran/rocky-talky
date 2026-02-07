@@ -48,11 +48,12 @@ export function ConversationList() {
   }
 
   return (
-    <ScrollArea className="h-full">
+    <ScrollArea className="h-full" data-testid="conversation-list">
       <div className="space-y-1 p-2">
         {conversations.map((convo) => (
           <button
             key={convo.id}
+            data-testid="conversation-item"
             onClick={() =>
               navigate({
                 to: '/chat/$conversationId',

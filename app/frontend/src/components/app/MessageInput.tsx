@@ -62,12 +62,14 @@ export function MessageInput({ onSend, disabled }: MessageInputProps) {
           disabled={disabled}
           rows={1}
           className="min-h-[40px] max-h-[200px] resize-none"
+          data-testid="message-input"
         />
         <Button
           onClick={handleSend}
           disabled={disabled || !value.trim()}
           size="icon"
           className="shrink-0 self-end"
+          data-testid="send-button"
         >
           <SendHorizontal className="h-4 w-4" />
         </Button>

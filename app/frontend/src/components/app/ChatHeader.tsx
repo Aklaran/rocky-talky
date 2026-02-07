@@ -34,14 +34,14 @@ export function ChatHeader({ conversation }: ChatHeaderProps) {
   })
 
   return (
-    <div className="flex items-center justify-between border-b px-4 py-3">
+    <div data-testid="chat-header" className="flex items-center justify-between border-b px-4 py-3">
       <h2 className="truncate text-base font-medium">
         {conversation.title || 'New conversation'}
       </h2>
 
       <AlertDialog>
         <AlertDialogTrigger asChild>
-          <Button variant="ghost" size="icon" title="Delete conversation">
+          <Button variant="ghost" size="icon" title="Delete conversation" data-testid="delete-conversation">
             <Trash2 className="h-4 w-4 text-muted-foreground" />
           </Button>
         </AlertDialogTrigger>

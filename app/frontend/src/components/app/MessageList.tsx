@@ -44,7 +44,7 @@ export function MessageList({ messages, streamingContent, isStreaming }: Message
   }
 
   return (
-    <ScrollArea className="flex-1">
+    <ScrollArea className="flex-1" data-testid="message-list">
       <div className="mx-auto max-w-3xl space-y-4 p-4">
         {messages.map((message) => (
           <MessageBubble key={message.id} message={message} />
@@ -74,6 +74,7 @@ function MessageBubble({ message }: { message: MessageOutput }) {
 
   return (
     <div
+      data-testid={isUser ? 'message-user' : 'message-assistant'}
       className={cn(
         'flex gap-3',
         isUser ? 'flex-row-reverse' : 'flex-row',
@@ -114,7 +115,7 @@ function MessageBubble({ message }: { message: MessageOutput }) {
  */
 function StreamingMessage({ content }: { content: string }) {
   return (
-    <div className="flex gap-3 flex-row">
+    <div data-testid="message-streaming" className="flex gap-3 flex-row">
       {/* Avatar */}
       <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
         <Bot className="h-4 w-4" />
