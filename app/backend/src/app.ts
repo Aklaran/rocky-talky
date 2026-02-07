@@ -10,6 +10,7 @@ import { createSessionMiddleware } from './lib/clients/session'
 import appRouter from './routes/root'
 import authRouter from './routes/auth'
 import streamRouter from './routes/stream'
+import testSetupRouter from './routes/test-setup'
 
 // Validate environment — fail fast
 const env = getEnv()
@@ -115,6 +116,9 @@ app.use('/api/auth', authRouter)
 // AI streaming route (REST SSE — not tRPC)
 // NOTE (Rocky Talky): Moved from /api/chat to /api/stream for Pi SDK agent bridge
 app.use('/api/stream', streamRouter)
+
+// Test setup routes (only available in NODE_ENV=test)
+app.use('/api/test', testSetupRouter)
 
 // tRPC API
 app.use(

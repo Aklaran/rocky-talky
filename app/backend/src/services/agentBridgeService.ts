@@ -173,6 +173,8 @@ const activeSessions = new Map<string, AgentSessionInfo>()
  * - In-memory session (we persist to our own Postgres)
  * - Annapurna skill injected via DefaultResourceLoader
  * - Extensions auto-loaded from ~/.pi/agent/extensions/
+ *
+ * In test mode (AGENT_MODE=mock), uses a mock SDK that simulates realistic event formats.
  */
 export async function createSession(sessionId: string): Promise<AgentSessionInfo> {
   if (activeSessions.has(sessionId)) {
@@ -180,6 +182,11 @@ export async function createSession(sessionId: string): Promise<AgentSessionInfo
   }
 
   logger.info({ sessionId }, 'Creating Pi agent session')
+
+  // Check for mock mode (E2E testing)
+  if (process.env.AGENT_MODE === 'mock') {
+    return createMockSession(sessionId)
+  }
 
   try {
     const sdk = await getSDK()
@@ -545,4 +552,224 @@ export async function disposeAllSessions(): Promise<void> {
   for (const sessionId of sessionIds) {
     await disposeSession(sessionId)
   }
+}
+
+// =============================================================================
+// Mock Session for E2E Testing
+// =============================================================================
+
+/**
+ * Create a mock Pi agent session for E2E testing.
+ * Simulates realistic event formats from the real Pi SDK.
+ */
+async function createMockSession(sessionId: string): Promise<AgentSessionInfo> {
+  logger.info({ sessionId }, 'Creating MOCK Pi agent session for E2E testing')
+
+  // Store captured UI context so we can fire notify() later
+  let capturedUiContext: any = null
+  let capturedListener: any = null
+
+  const mockSession = {
+    subscribe: (listener: any) => {
+      capturedListener = listener
+      return () => {} // unsubscribe
+    },
+
+    prompt: async (_message: string) => {
+      if (!capturedListener) {
+        throw new Error('No listener subscribed')
+      }
+
+      // Simulate the event sequence
+      setTimeout(() => {
+        // 1. agent_start
+        capturedListener({ type: 'agent_start' })
+
+        // 2. Text response
+        capturedListener({
+          type: 'message_update',
+          assistantMessageEvent: { type: 'text_delta', delta: 'Spawning a test agent...' },
+        })
+
+        // 3. Tool start - spawn_agent
+        capturedListener({
+          type: 'tool_execution_start',
+          toolCallId: 'tool-mock-1',
+          toolName: 'spawn_agent',
+          args: {
+            description: 'Mock test task',
+            tier: 'trivial-simple',
+            prompt: 'Do something simple',
+          },
+        })
+
+        // 4. Tool end - spawn_agent with MCP-shaped result (CRITICAL: matches real SDK)
+        capturedListener({
+          type: 'tool_execution_end',
+          toolCallId: 'tool-mock-1',
+          toolName: 'spawn_agent',
+          isError: false,
+          result: {
+            content: [
+              {
+                type: 'text',
+                text: 'Agent spawned: task-mock-12345 — Mock test task (model: claude-3-haiku-20240307, thinking: none)\nStatus: running',
+              },
+            ],
+          },
+        })
+
+        // 5. More text
+        capturedListener({
+          type: 'message_update',
+          assistantMessageEvent: { type: 'text_delta', delta: ' Agent is running.' },
+        })
+
+        // 6. After a delay, call notify() via captured uiContext (simulates async completion)
+        // IMPORTANT: Call notify() BEFORE agent_end so the stream is still open
+        setTimeout(() => {
+          if (capturedUiContext?.notify) {
+            logger.info({ sessionId }, 'Mock notify() firing for completion')
+            // Use Sirdar's real format (this caught production bugs!)
+            capturedUiContext.notify(
+              '✅ Agent completed: task-mock-12345\nMock test task',
+              'info'
+            )
+          }
+
+          // 7. Then fire agent_end (after notify)
+          setTimeout(() => {
+            capturedListener({ type: 'agent_end', messages: [] })
+          }, 100)
+        }, 300)
+      }, 50) // Small delay to simulate async
+    },
+
+    bindExtensions: async (opts: any) => {
+      // Capture uiContext so we can call notify() later
+      if (opts?.uiContext) {
+        capturedUiContext = opts.uiContext
+        logger.debug({ sessionId }, 'Mock captured uiContext')
+      }
+    },
+
+    dispose: () => {
+      // no-op
+    },
+  }
+
+  // Create session info and add to activeSessions FIRST
+  // (so notify() can find it when it fires)
+  const info: AgentSessionInfo = {
+    sessionId,
+    piSession: mockSession,
+    createdAt: new Date(),
+    eventEmitter: null,
+  }
+
+  activeSessions.set(sessionId, info)
+
+  // Now bind extensions to capture uiContext
+  await mockSession.bindExtensions({
+    uiContext: {
+      notify: (msg: string, _level?: string) => {
+        logger.info({ sessionId, msg }, 'notify() callback fired (MOCK)')
+        // Parse Sirdar agent completion notifications (same as real implementation)
+        const completedMatch = msg.match(/Agent completed:\s*(task-[^\s\n]+)(?:\n(.+))?/) ||
+                              msg.match(/Agent (task-[^\s]+) completed:\s*(.+)/)
+        const failedMatch = msg.match(/Agent failed:\s*(task-[^\s\n]+)(?:\n(.+))?/) ||
+                            msg.match(/Agent (task-[^\s]+) failed:\s*(.+)/)
+        
+        if (completedMatch) {
+          const taskId = completedMatch[1]
+          const description = completedMatch[2] || ''
+          logger.info({ sessionId, taskId, description }, 'Mock parsed completion notification')
+          
+          // Find the session info and emit event
+          const sessionInfo = activeSessions.get(sessionId)
+          if (sessionInfo?.eventEmitter) {
+            logger.info({ sessionId, taskId }, 'Emitting subagent_complete event')
+            sessionInfo.eventEmitter({
+              type: 'subagent_complete',
+              taskId,
+              description,
+              success: true,
+            })
+          } else {
+            logger.warn({ sessionId, taskId, hasEmitter: !!sessionInfo?.eventEmitter }, 'No event emitter for subagent completion')
+          }
+          
+          // Persist to DB
+          subagentRepo.getSubagentByTaskId(taskId)
+            .then(subagent => {
+              if (subagent) {
+                return subagentRepo.updateSubagentStatus(subagent.id, 'completed')
+              }
+              return undefined
+            })
+            .catch(err => {
+              logger.error({ err, taskId }, 'Failed to persist subagent completion in mock notify()')
+            })
+        } else if (failedMatch) {
+          const taskId = failedMatch[1]
+          const description = failedMatch[2] || ''
+          
+          const sessionInfo = activeSessions.get(sessionId)
+          if (sessionInfo?.eventEmitter) {
+            sessionInfo.eventEmitter({
+              type: 'subagent_complete',
+              taskId,
+              description,
+              success: false,
+            })
+          }
+          
+          subagentRepo.getSubagentByTaskId(taskId)
+            .then(subagent => {
+              if (subagent) {
+                return subagentRepo.updateSubagentStatus(subagent.id, 'failed')
+              }
+              return undefined
+            })
+            .catch(err => {
+              logger.error({ err, taskId }, 'Failed to persist subagent failure in mock notify()')
+            })
+        } else {
+          logger.warn({ sessionId, msg }, 'notify() message did not match completion or failure pattern')
+        }
+      },
+      setStatus: (_key: string, _value: string | undefined) => {},
+      setWidget: (key: string, value: string[] | undefined) => {
+        const sessionInfo = activeSessions.get(sessionId)
+        if (key && value && sessionInfo?.eventEmitter) {
+          sessionInfo.eventEmitter({
+            type: 'subagent_output',
+            lines: value,
+          })
+        }
+      },
+      setFooter: (_key: string, _value: string | undefined) => {},
+      setHeader: (_key: string, _value: string | undefined) => {},
+      setTitle: (_value: string) => {},
+      setWorkingMessage: (_msg: string) => {},
+      select: async (_title: string, _options: string[]) => undefined,
+      confirm: async (_title: string) => false,
+      input: async (_title: string) => undefined,
+      custom: async () => undefined as never,
+      setEditorText: (_text: string) => {},
+      getEditorText: () => '',
+      editor: async () => undefined,
+      setEditorComponent: () => {},
+      get theme(): any { return {}; },
+      getAllThemes: () => [],
+      getTheme: () => undefined,
+      setTheme: () => ({ success: false, error: 'UI not available' }),
+      getToolsExpanded: () => false,
+      setToolsExpanded: () => {},
+    },
+  })
+
+  logger.info({ sessionId }, 'Mock Pi agent session created successfully')
+
+  return info
 }

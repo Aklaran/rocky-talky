@@ -36,8 +36,12 @@ export default defineConfig({
       reuseExistingServer: !process.env.CI,
       timeout: 30000,
       env: {
+        DATABASE_URL: 'postgresql://basecamp:basecamp_dev@localhost:5432/basecamp_test',
+        SESSION_SECRET: 'test-secret-that-is-at-least-32-characters-long-for-tests',
         AI_PROVIDER: 'mock',
         AI_MODEL: 'mock-model',
+        AGENT_MODE: 'mock', // Use mock Pi SDK for E2E tests
+        NODE_ENV: 'test', // Enable test routes like /api/test/setup-mock-agent
       },
     },
     {

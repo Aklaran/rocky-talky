@@ -14,15 +14,15 @@ export function SubagentPanel({ subagents }: SubagentPanelProps) {
   const completedCount = subagents.filter((s) => s.status === 'completed').length
 
   return (
-    <div className="space-y-2 px-4 pb-2">
+    <div className="space-y-2 px-4 pb-2" data-testid="subagent-panel">
       {/* Count badge */}
       {runningCount > 0 && (
-        <div className="text-xs text-muted-foreground">
+        <div className="text-xs text-muted-foreground" data-testid="subagent-status">
           {runningCount} {runningCount === 1 ? 'agent' : 'agents'} running
         </div>
       )}
       {runningCount === 0 && completedCount > 0 && (
-        <div className="text-xs text-muted-foreground">
+        <div className="text-xs text-muted-foreground" data-testid="subagent-status">
           {completedCount} {completedCount === 1 ? 'agent' : 'agents'} completed
         </div>
       )}
@@ -48,12 +48,15 @@ function SubagentCard({ subagent }: SubagentCardProps) {
     <div
       className="rounded-lg bg-muted/50 p-3 space-y-2"
       data-status={status}
+      data-testid="subagent-card"
     >
       {/* Header: status icon, description, tier */}
       <div className="flex items-start gap-2">
         <StatusIcon status={status} />
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium leading-tight">{description}</p>
+          <p className="text-sm font-medium leading-tight" data-testid="subagent-description">
+            {description}
+          </p>
         </div>
         {tier && (
           <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
