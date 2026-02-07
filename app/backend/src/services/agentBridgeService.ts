@@ -412,7 +412,10 @@ export async function* sendMessage(
         // Parse subagent result
         if (event.toolName === 'spawn_agent' && !event.isError) {
           const resultText = String(event.result || '')
-          const taskIdMatch = resultText.match(/Task ID:\s*([^\s\n]+)/)
+          logger.info({ sessionId, resultText }, 'spawn_agent tool result')
+          // Sirdar format: "Agent spawned: task-xyz — description (...)\nStatus: running"
+          const taskIdMatch = resultText.match(/Agent spawned:\s*(task-[^\s]+)/) ||
+                              resultText.match(/Task ID:\s*([^\s\n]+)/)
           const statusMatch = resultText.match(/Status:\s*([^\s\n]+)/)
           
           pushEvent({
