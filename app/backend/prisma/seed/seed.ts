@@ -4,11 +4,7 @@ import * as argon2 from 'argon2'
 const prisma = new PrismaClient()
 
 async function main() {
-  if (process.env.NODE_ENV === 'production') {
-    console.error('❌ Seed should not run in production')
-    process.exit(1)
-  }
-
+  // Rocky Talky: seed runs in all environments (single-user app, sample data is useful)
   console.log('🌱 Seeding database...')
 
   // Create a demo user (template code — kept but unused in Rocky Talky)

@@ -1,42 +1,24 @@
-# Production compose — full stack in Docker
-# Usage: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+# Production compose — Rocky Talky
+# Uses the Postgres instance from Basecamp's docker-compose (shared DB)
+# Usage: docker compose -f docker-compose.prod.yml up -d --build
 services:
   backend:
     build:
       context: .
       dockerfile: docker/Dockerfile
     ports:
-      - '127.0.0.1:7100:3000'
+      - '127.0.0.1:7200:3000'
     environment:
-      DATABASE_URL: postgresql://basecamp:${POSTGRES_PASSWORD:-basecamp_dev}@postgres:5432/basecamp
+      DATABASE_URL: postgresql://basecamp:${POSTGRES_PASSWORD:-basecamp_dev}@host.docker.internal:5432/basecamp
       SESSION_SECRET: ${SESSION_SECRET}
       COOKIE_SECURE: ${COOKIE_SECURE:-true}
       TRUST_PROXY: 1
       NODE_ENV: production
       PORT: 3000
-      AI_PROVIDER: ${AI_PROVIDER:-}
-      AI_MODEL: ${AI_MODEL:-}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-      AI_SYSTEM_PROMPT: ${AI_SYSTEM_PROMPT:-}
-    depends_on:
-      postgres:
-        condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     restart: unless-stopped
     logging:
       options:
         max-size: '10m'
         max-file: '3'
-
-  # Optional: uncomment for internet-facing deployments with SSL
-  # nginx:
-  #   image: nginx:alpine
-  #   ports:
-  #     - '80:80'
-  #     - '443:443'
-  #   volumes:
-  #     - ./docker/nginx.conf:/etc/nginx/conf.d/default.conf:ro
-  #     - ./app/frontend/dist:/usr/share/nginx/html:ro
-  #   depends_on:
-  #     - backend
-  #   restart: unless-stopped
