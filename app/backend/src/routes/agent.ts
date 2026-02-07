@@ -1,4 +1,4 @@
-import { router, protectedProcedure } from '../lib/clients/trpc'
+import { router, publicProcedure } from '../lib/clients/trpc'
 import { z } from 'zod'
 import * as agentBridge from '../services/agentBridgeService'
 import { observable } from '@trpc/server/observable'
@@ -44,7 +44,7 @@ export const agentRouter = router({
    * Returns the session info.
    * Throws if session already exists.
    */
-  startSession: protectedProcedure
+  startSession: publicProcedure
     .input(startSessionSchema)
     .mutation(async ({ input }) => {
       logger.info({ sessionId: input.sessionId }, 'Starting agent session')
@@ -66,7 +66,7 @@ export const agentRouter = router({
    * Returns success status.
    * Throws if session not found.
    */
-  sendMessage: protectedProcedure
+  sendMessage: publicProcedure
     .input(sendMessageSchema)
     .mutation(async ({ input }) => {
       logger.info(
@@ -105,7 +105,7 @@ export const agentRouter = router({
    * Note: This is a subscription (SSE/WebSocket). The client should establish
    * the subscription before calling sendMessage.
    */
-  streamEvents: protectedProcedure
+  streamEvents: publicProcedure
     .input(streamEventsSchema)
     .subscription(({ input }) => {
       return observable<agentBridge.AgentEvent>((emit) => {
@@ -136,7 +136,7 @@ export const agentRouter = router({
    *
    * Returns success status.
    */
-  stopSession: protectedProcedure
+  stopSession: publicProcedure
     .input(stopSessionSchema)
     .mutation(async ({ input }) => {
       logger.info({ sessionId: input.sessionId }, 'Stopping agent session')
@@ -157,7 +157,7 @@ export const agentRouter = router({
    *
    * Returns session info or null if no session exists.
    */
-  getSession: protectedProcedure
+  getSession: publicProcedure
     .input(z.object({ sessionId: z.string() }))
     .query(({ input }) => {
       const sessionInfo = agentBridge.getSession(input.sessionId)
@@ -174,7 +174,7 @@ export const agentRouter = router({
   /**
    * Get count of active agent sessions.
    */
-  getActiveSessionCount: protectedProcedure.query(() => {
+  getActiveSessionCount: publicProcedure.query(() => {
     return {
       count: agentBridge.getActiveSessionCount(),
     }

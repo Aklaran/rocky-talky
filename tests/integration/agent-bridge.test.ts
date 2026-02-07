@@ -1,212 +1,246 @@
-import { describe, it, expect, beforeEach, afterEach, vi, beforeAll, afterAll } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import * as agentBridge from '@backend/services/agentBridgeService'
 
 /**
- * Agent Bridge Integration Tests
- *
- * These tests validate the agent bridge service can:
- * - Create Pi agent sessions
- * - Send messages and receive events
- * - Stream text deltas
- * - Handle tool calls
- * - Clean up sessions properly
- *
- * Note: These tests make REAL API calls to the Anthropic API via the Pi SDK.
- * They require:
- * - Valid API keys in ~/.pi/agent/auth.json
- * - Annapurna skill at ~/.pi/agent/skills/annapurna/SKILL.md
- * - Network connectivity
- *
- * Run selectively to avoid API costs: pnpm test agent-bridge
+ * Agent Bridge Unit Tests — uses SDK injection for mocking.
  */
 
+function createMockSession() {
+  return {
+    subscribe: vi.fn(() => vi.fn()),
+    prompt: vi.fn(async () => {}),
+    dispose: vi.fn(),
+    isStreaming: false,
+    agent: {},
+  }
+}
+
+function createMockSDK(mockSession: ReturnType<typeof createMockSession>) {
+  const sdk = {
+    createAgentSession: vi.fn(async () => ({
+      session: mockSession,
+      extensionsResult: { extensions: [], errors: [], runtime: {} },
+    })),
+    AuthStorage: vi.fn(function(this: any) {}),
+    ModelRegistry: vi.fn(function(this: any) {}),
+    DefaultResourceLoader: vi.fn(function(this: any) { this.reload = vi.fn(async () => {}) }),
+    SessionManager: { inMemory: vi.fn(() => ({})) },
+  }
+
+  const ai = {
+    getModel: vi.fn(() => ({ id: 'claude-opus-4-6', name: 'Claude Opus 4.6' })),
+  }
+
+  return { sdk, ai }
+}
+
 describe('Agent Bridge Service', () => {
+  let mockSession: ReturnType<typeof createMockSession>
+  let sdk: ReturnType<typeof createMockSDK>['sdk']
+  let ai: ReturnType<typeof createMockSDK>['ai']
+
   beforeEach(async () => {
-    // Clean up any lingering sessions before each test
+    mockSession = createMockSession()
+    const mocks = createMockSDK(mockSession)
+    sdk = mocks.sdk
+    ai = mocks.ai
+    agentBridge._setSDKForTesting(sdk, ai)
     await agentBridge.disposeAllSessions()
   })
 
   afterEach(async () => {
-    // Clean up after each test
     await agentBridge.disposeAllSessions()
+    agentBridge._setSDKForTesting(null, null)
   })
 
   describe('Session Management', () => {
     it('creates a new agent session', async () => {
-      const sessionId = 'test-session-1'
+      const info = await agentBridge.createSession('test-1')
 
-      const sessionInfo = await agentBridge.createSession(sessionId)
-
-      expect(sessionInfo).toBeDefined()
-      expect(sessionInfo.sessionId).toBe(sessionId)
-      expect(sessionInfo.piSession).toBeDefined()
-      expect(sessionInfo.createdAt).toBeInstanceOf(Date)
+      expect(info.sessionId).toBe('test-1')
+      expect(info.createdAt).toBeInstanceOf(Date)
+      expect(sdk.createAgentSession).toHaveBeenCalledOnce()
     })
 
-    it('throws error when creating duplicate session', async () => {
-      const sessionId = 'test-session-2'
-
-      await agentBridge.createSession(sessionId)
-
-      await expect(agentBridge.createSession(sessionId)).rejects.toThrow(
-        /already exists/,
-      )
+    it('throws on duplicate session', async () => {
+      await agentBridge.createSession('test-2')
+      await expect(agentBridge.createSession('test-2')).rejects.toThrow(/already exists/)
     })
 
     it('retrieves existing session', async () => {
-      const sessionId = 'test-session-3'
-
-      await agentBridge.createSession(sessionId)
-      const retrieved = agentBridge.getSession(sessionId)
-
-      expect(retrieved).toBeDefined()
-      expect(retrieved?.sessionId).toBe(sessionId)
+      await agentBridge.createSession('test-3')
+      const retrieved = agentBridge.getSession('test-3')
+      expect(retrieved).not.toBeNull()
+      expect(retrieved?.sessionId).toBe('test-3')
     })
 
     it('returns null for non-existent session', () => {
-      const retrieved = agentBridge.getSession('non-existent')
-
-      expect(retrieved).toBeNull()
+      expect(agentBridge.getSession('nope')).toBeNull()
     })
 
-    it('disposes a session successfully', async () => {
-      const sessionId = 'test-session-4'
-
-      await agentBridge.createSession(sessionId)
-      const disposed = await agentBridge.disposeSession(sessionId)
-
+    it('disposes a session and calls dispose on Pi session', async () => {
+      await agentBridge.createSession('test-4')
+      const disposed = await agentBridge.disposeSession('test-4')
       expect(disposed).toBe(true)
-
-      const retrieved = agentBridge.getSession(sessionId)
-      expect(retrieved).toBeNull()
+      expect(agentBridge.getSession('test-4')).toBeNull()
+      expect(mockSession.dispose).toHaveBeenCalled()
     })
 
-    it('returns false when disposing non-existent session', async () => {
-      const disposed = await agentBridge.disposeSession('non-existent')
-
-      expect(disposed).toBe(false)
+    it('returns false disposing non-existent session', async () => {
+      expect(await agentBridge.disposeSession('nope')).toBe(false)
     })
 
     it('tracks active session count', async () => {
-      const initialCount = agentBridge.getActiveSessionCount()
-      expect(initialCount).toBe(0)
-
-      await agentBridge.createSession('session-1')
-      expect(agentBridge.getActiveSessionCount()).toBe(1)
-
-      await agentBridge.createSession('session-2')
+      expect(agentBridge.getActiveSessionCount()).toBe(0)
+      await agentBridge.createSession('a')
+      await agentBridge.createSession('b')
       expect(agentBridge.getActiveSessionCount()).toBe(2)
-
-      await agentBridge.disposeSession('session-1')
-      expect(agentBridge.getActiveSessionCount()).toBe(1)
-
       await agentBridge.disposeAllSessions()
       expect(agentBridge.getActiveSessionCount()).toBe(0)
     })
   })
 
   describe('Message Handling', () => {
-    it('sends a message and receives events', async () => {
-      const sessionId = 'test-message-1'
-
-      await agentBridge.createSession(sessionId)
-
-      const message = 'Hello, test message'
-      const events: agentBridge.AgentEvent[] = []
-
-      for await (const event of agentBridge.sendMessage(sessionId, message)) {
-        events.push(event)
-      }
-
-      // Should receive at least some events (exact count depends on SDK)
-      expect(events.length).toBeGreaterThan(0)
-
-      // Should include a completion event
-      const completionEvents = events.filter((e) => e.type === 'completion')
-      expect(completionEvents.length).toBeGreaterThan(0)
-
-      // Completion should have accumulated text
-      const completion = completionEvents[0] as agentBridge.AgentEventCompletion
-      expect(completion.fullText).toBeDefined()
-      expect(typeof completion.fullText).toBe('string')
-    }, 60000) // Increase timeout for actual API call
-
-    it('includes text delta events', async () => {
-      const sessionId = 'test-message-2'
-
-      await agentBridge.createSession(sessionId)
-
-      const message = 'Say hello'
-      const events: agentBridge.AgentEvent[] = []
-
-      for await (const event of agentBridge.sendMessage(sessionId, message)) {
-        events.push(event)
-      }
-
-      const textEvents = events.filter((e) => e.type === 'text')
-
-      // Should receive text chunks (streaming)
-      expect(textEvents.length).toBeGreaterThan(0)
-
-      // Each text event should have content
-      textEvents.forEach((event) => {
-        const textEvent = event as agentBridge.AgentEventChunk
-        expect(textEvent.content).toBeDefined()
-        expect(typeof textEvent.content).toBe('string')
+    it('sends a message and yields events', async () => {
+      mockSession.subscribe.mockImplementation((listener: any) => {
+        setTimeout(() => {
+          listener({ type: 'agent_start' })
+          listener({
+            type: 'message_update',
+            assistantMessageEvent: { type: 'text_delta', delta: 'Hello' },
+          })
+          listener({
+            type: 'message_update',
+            assistantMessageEvent: { type: 'text_delta', delta: ' world' },
+          })
+          listener({ type: 'agent_end', messages: [] })
+        }, 10)
+        return vi.fn()
       })
-    }, 60000)
 
-    it('throws error when sending to non-existent session', async () => {
-      await expect(
-        (async () => {
-          for await (const event of agentBridge.sendMessage(
-            'non-existent',
-            'test',
-          )) {
-            // Should not reach here
-          }
-        })(),
-      ).rejects.toThrow(/No agent session found/)
+      mockSession.prompt.mockImplementation(async () => {
+        await new Promise((r) => setTimeout(r, 50))
+      })
+
+      await agentBridge.createSession('msg-1')
+      const events: agentBridge.AgentEvent[] = []
+
+      for await (const event of agentBridge.sendMessage('msg-1', 'Hello')) {
+        events.push(event)
+      }
+
+      const textEvents = events.filter((e) => e.type === 'text') as agentBridge.AgentEventText[]
+      expect(textEvents.length).toBe(2)
+      expect(textEvents.map((e) => e.content).join('')).toBe('Hello world')
+      expect(events.some((e) => e.type === 'completion')).toBe(true)
     })
-  })
 
-  describe('Tool Call Detection', () => {
-    it('detects tool calls when they occur', async () => {
-      const sessionId = 'test-tools-1'
+    it('throws for non-existent session', async () => {
+      await expect(async () => {
+        for await (const _ of agentBridge.sendMessage('nope', 'hi')) {
+          // should not reach
+        }
+      }).rejects.toThrow(/No agent session found/)
+    })
 
-      await agentBridge.createSession(sessionId)
+    it('detects tool calls', async () => {
+      mockSession.subscribe.mockImplementation((listener: any) => {
+        setTimeout(() => {
+          listener({ type: 'agent_start' })
+          listener({
+            type: 'tool_execution_start',
+            toolCallId: 'call-1',
+            toolName: 'Read',
+            args: { path: '/tmp/test' },
+          })
+          listener({
+            type: 'tool_execution_end',
+            toolCallId: 'call-1',
+            toolName: 'Read',
+            isError: false,
+          })
+          listener({
+            type: 'message_update',
+            assistantMessageEvent: { type: 'text_delta', delta: 'Done' },
+          })
+          listener({ type: 'agent_end', messages: [] })
+        }, 10)
+        return vi.fn()
+      })
 
-      // Ask for something that requires a tool call
-      const message = 'What is the current date and time?'
+      mockSession.prompt.mockImplementation(async () => {
+        await new Promise((r) => setTimeout(r, 50))
+      })
+
+      await agentBridge.createSession('tool-1')
       const events: agentBridge.AgentEvent[] = []
 
-      for await (const event of agentBridge.sendMessage(sessionId, message)) {
+      for await (const event of agentBridge.sendMessage('tool-1', 'read a file')) {
         events.push(event)
       }
 
-      // May or may not have tool calls depending on the model's behavior
-      // Just verify we can handle tool call events if they occur
-      const toolCallEvents = events.filter((e) => e.type === 'tool_call')
+      const toolStart = events.find((e) => e.type === 'tool_start') as agentBridge.AgentEventToolStart
+      expect(toolStart).toBeDefined()
+      expect(toolStart.toolName).toBe('Read')
 
-      toolCallEvents.forEach((event) => {
-        const toolEvent = event as agentBridge.AgentEventToolCall
-        expect(toolEvent.toolName).toBeDefined()
-        expect(typeof toolEvent.toolName).toBe('string')
+      const toolEnd = events.find((e) => e.type === 'tool_end') as agentBridge.AgentEventToolEnd
+      expect(toolEnd).toBeDefined()
+      expect(toolEnd.isError).toBe(false)
+    })
+
+    it('detects subagent spawning', async () => {
+      mockSession.subscribe.mockImplementation((listener: any) => {
+        setTimeout(() => {
+          listener({ type: 'agent_start' })
+          listener({
+            type: 'tool_execution_start',
+            toolCallId: 'call-1',
+            toolName: 'spawn_agent',
+            args: { description: 'test task', prompt: 'do something', tier: 'light' },
+          })
+          listener({
+            type: 'tool_execution_end',
+            toolCallId: 'call-1',
+            toolName: 'spawn_agent',
+            isError: false,
+          })
+          listener({ type: 'agent_end', messages: [] })
+        }, 10)
+        return vi.fn()
       })
-    }, 60000)
-  })
 
-  describe('Cleanup', () => {
-    it('disposes all sessions at once', async () => {
-      await agentBridge.createSession('cleanup-1')
-      await agentBridge.createSession('cleanup-2')
-      await agentBridge.createSession('cleanup-3')
+      mockSession.prompt.mockImplementation(async () => {
+        await new Promise((r) => setTimeout(r, 50))
+      })
 
-      expect(agentBridge.getActiveSessionCount()).toBe(3)
+      await agentBridge.createSession('subagent-1')
+      const events: agentBridge.AgentEvent[] = []
 
-      await agentBridge.disposeAllSessions()
+      for await (const event of agentBridge.sendMessage('subagent-1', 'spawn')) {
+        events.push(event)
+      }
 
-      expect(agentBridge.getActiveSessionCount()).toBe(0)
+      const toolStart = events.find(
+        (e) => e.type === 'tool_start' && (e as agentBridge.AgentEventToolStart).toolName === 'spawn_agent',
+      ) as agentBridge.AgentEventToolStart
+      expect(toolStart).toBeDefined()
+      expect(toolStart.args).toEqual(expect.objectContaining({ description: 'test task' }))
+    })
+
+    it('handles prompt errors gracefully', async () => {
+      mockSession.subscribe.mockImplementation(() => vi.fn())
+      mockSession.prompt.mockRejectedValue(new Error('API rate limit'))
+
+      await agentBridge.createSession('err-1')
+      const events: agentBridge.AgentEvent[] = []
+
+      for await (const event of agentBridge.sendMessage('err-1', 'hello')) {
+        events.push(event)
+      }
+
+      const errorEvent = events.find((e) => e.type === 'error') as agentBridge.AgentEventError
+      expect(errorEvent).toBeDefined()
+      expect(errorEvent.error).toContain('API rate limit')
     })
   })
 })
