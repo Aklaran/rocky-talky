@@ -34,3 +34,4 @@ playwright-report/
 
 # Generated
 app/frontend/src/routeTree.gen.ts
+.worktrees/

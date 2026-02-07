@@ -109,7 +109,7 @@ export async function updateSession(
   }
 
   // Update
-  const session = await sessionRepo.updateSession(sessionId, {
+  await sessionRepo.updateSession(sessionId, {
     title: input.title,
     tags: input.tags,
     status: input.status,
