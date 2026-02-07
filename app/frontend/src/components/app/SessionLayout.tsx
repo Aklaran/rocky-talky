@@ -61,7 +61,7 @@ export function SessionLayout({ children }: { children: ReactNode }) {
 
   return (
     <SidebarContext.Provider value={{ toggleSidebar: () => setSidebarOpen(true) }}>
-      <div className="flex h-screen">
+      <div className="flex h-dvh">
         {/* Desktop Sidebar - Always visible on md+ */}
         <div data-testid="sidebar" className="hidden md:flex w-72 flex-col border-r bg-muted/30">
           {sidebarContent}

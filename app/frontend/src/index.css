@@ -61,7 +61,7 @@
 @layer utilities {
   /* Safe area padding for iOS notch devices */
   .pb-safe {
-    padding-bottom: env(safe-area-inset-bottom, 1rem);
+    padding-bottom: env(safe-area-inset-bottom, 0.5rem);
   }
   
   .pt-safe {

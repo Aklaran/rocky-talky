@@ -67,7 +67,7 @@ export function MessageList({
             </div>
 
             {/* Streaming content */}
-            <div className="max-w-[85%] md:max-w-[80%] rounded-lg px-4 py-2.5 bg-muted text-foreground">
+            <div className="max-w-[80%] md:max-w-[75%] rounded-lg px-4 py-2.5 bg-muted text-foreground">
               <MarkdownMessage content={streamingContent} isStreaming />
               <ToolCallIndicator tools={activeTools} />
             </div>
@@ -98,7 +98,7 @@ function MessageBubble({ message }: { message: MessageOutput }) {
         </div>
 
         {/* Tool message content */}
-        <div className="max-w-[85%] md:max-w-[80%] rounded-lg px-4 py-2.5 bg-muted/50 border border-orange-500/20">
+        <div className="max-w-[80%] md:max-w-[75%] rounded-lg px-4 py-2.5 bg-muted/50 border border-orange-500/20">
           <div className="flex items-center gap-1.5 mb-1">
             <Wrench className="h-3 w-3 text-orange-600" />
             <span className="text-xs font-medium text-orange-600">Tool</span>
@@ -136,7 +136,7 @@ function MessageBubble({ message }: { message: MessageOutput }) {
       {/* Message content */}
       <div
         className={cn(
-          'max-w-[85%] md:max-w-[80%] rounded-lg px-4 py-2.5',
+          'max-w-[80%] md:max-w-[75%] rounded-lg px-4 py-2.5',
           isUser
             ? 'bg-primary text-primary-foreground'
             : 'bg-muted text-foreground',
