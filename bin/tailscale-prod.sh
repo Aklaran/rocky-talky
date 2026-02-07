@@ -3,14 +3,15 @@ set -e
 
 # Start Basecamp in production mode over Tailscale — fully dockerized
 # Express serves built frontend static files — no nginx needed
-# http://<tailscale-ip>:3000
+# Tailscale Serve provides HTTPS termination → localhost:3000
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 cd "$PROJECT_DIR"
 
-# Get Tailscale IP
+# Get Tailscale hostname for HTTPS URL
 TS_IP=$(tailscale ip -4 2>/dev/null || echo "unknown")
+TS_HOSTNAME=$(tailscale status --json 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['Self']['DNSName'].rstrip('.'))" 2>/dev/null || echo "")
 echo "🏔️  Basecamp Tailscale Prod (Docker)"
 echo "====================================="
 echo ""
@@ -55,8 +56,18 @@ for i in $(seq 1 30); do
   sleep 1
 done
 
+# Ensure Tailscale Serve is proxying HTTPS → localhost:3000
+if ! tailscale serve status 2>/dev/null | grep -q "proxy http://127.0.0.1:3000"; then
+  echo "Setting up Tailscale HTTPS proxy..."
+  sudo tailscale serve --bg 3000
+fi
+
 echo ""
-echo "🏔️  Basecamp running at http://${TS_IP}:3000"
+if [ -n "$TS_HOSTNAME" ]; then
+  echo "🏔️  Basecamp running at https://${TS_HOSTNAME}"
+else
+  echo "🏔️  Basecamp running at http://${TS_IP}:3000"
+fi
 echo ""
 echo "Logs:    docker compose -f docker-compose.yml -f docker-compose.prod.yml logs -f"
 echo "Stop:    docker compose -f docker-compose.yml -f docker-compose.prod.yml down"
