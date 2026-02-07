@@ -270,6 +270,218 @@ describe('Agent Bridge Service', () => {
       expect(toolStart.args).toEqual(expect.objectContaining({ description: 'test task' }))
     })
 
+    it('emits subagent_spawn event when spawn_agent tool starts', async () => {
+      mockSession.subscribe.mockImplementation((listener: any) => {
+        setTimeout(() => {
+          listener({ type: 'agent_start' })
+          listener({
+            type: 'tool_execution_start',
+            toolCallId: 'spawn-call-1',
+            toolName: 'spawn_agent',
+            args: { 
+              description: 'Fix bug in auth service', 
+              prompt: 'Fix the login issue',
+              tier: 'standard' 
+            },
+          })
+          listener({ type: 'agent_end', messages: [] })
+        }, 10)
+        return vi.fn()
+      })
+
+      mockSession.prompt.mockImplementation(async () => {
+        await new Promise((r) => setTimeout(r, 50))
+      })
+
+      await agentBridge.createSession('subagent-spawn-1')
+      const events: agentBridge.AgentEvent[] = []
+
+      for await (const event of agentBridge.sendMessage('subagent-spawn-1', 'fix bug')) {
+        events.push(event)
+      }
+
+      const spawnEvent = events.find((e) => e.type === 'subagent_spawn')
+      expect(spawnEvent).toBeDefined()
+      
+      if (spawnEvent?.type === 'subagent_spawn') {
+        expect(spawnEvent.toolCallId).toBe('spawn-call-1')
+        expect(spawnEvent.description).toBe('Fix bug in auth service')
+        expect(spawnEvent.tier).toBe('standard')
+        expect(spawnEvent.prompt).toBe('Fix the login issue')
+      }
+    })
+
+    it('emits subagent_result event when spawn_agent tool completes', async () => {
+      mockSession.subscribe.mockImplementation((listener: any) => {
+        setTimeout(() => {
+          listener({ type: 'agent_start' })
+          listener({
+            type: 'tool_execution_start',
+            toolCallId: 'spawn-call-2',
+            toolName: 'spawn_agent',
+            args: { description: 'test', prompt: 'test', tier: 'light' },
+          })
+          listener({
+            type: 'tool_execution_end',
+            toolCallId: 'spawn-call-2',
+            toolName: 'spawn_agent',
+            isError: false,
+            result: 'Task spawned successfully. Task ID: task-abc-123\nStatus: running',
+          })
+          listener({ type: 'agent_end', messages: [] })
+        }, 10)
+        return vi.fn()
+      })
+
+      mockSession.prompt.mockImplementation(async () => {
+        await new Promise((r) => setTimeout(r, 50))
+      })
+
+      await agentBridge.createSession('subagent-result-1')
+      const events: agentBridge.AgentEvent[] = []
+
+      for await (const event of agentBridge.sendMessage('subagent-result-1', 'spawn')) {
+        events.push(event)
+      }
+
+      const resultEvent = events.find((e) => e.type === 'subagent_result')
+      expect(resultEvent).toBeDefined()
+      
+      if (resultEvent?.type === 'subagent_result') {
+        expect(resultEvent.toolCallId).toBe('spawn-call-2')
+        expect(resultEvent.taskId).toBe('task-abc-123')
+        expect(resultEvent.status).toBe('running')
+      }
+    })
+
+    it('emits subagent_output events when setWidget is called', async () => {
+      let capturedUIContext: any = null
+
+      mockSession.bindExtensions.mockImplementation(async (opts: any) => {
+        capturedUIContext = opts.uiContext
+      })
+
+      mockSession.subscribe.mockImplementation((listener: any) => {
+        setTimeout(() => {
+          listener({ type: 'agent_start' })
+          // Simulate widget update during agent execution
+          setTimeout(() => {
+            if (capturedUIContext) {
+              capturedUIContext.setWidget('agent-output', ['Line 1', 'Line 2', 'Line 3'])
+            }
+          }, 5)
+          setTimeout(() => {
+            listener({ type: 'agent_end', messages: [] })
+          }, 20)
+        }, 10)
+        return vi.fn()
+      })
+
+      mockSession.prompt.mockImplementation(async () => {
+        await new Promise((r) => setTimeout(r, 50))
+      })
+
+      await agentBridge.createSession('widget-1')
+      const events: agentBridge.AgentEvent[] = []
+
+      for await (const event of agentBridge.sendMessage('widget-1', 'test')) {
+        events.push(event)
+      }
+
+      const outputEvents = events.filter((e) => e.type === 'subagent_output')
+      expect(outputEvents).toHaveLength(1)
+      
+      if (outputEvents[0]?.type === 'subagent_output') {
+        expect(outputEvents[0].lines).toEqual(['Line 1', 'Line 2', 'Line 3'])
+      }
+    })
+
+    it('emits subagent_complete event when notify is called with completion message', async () => {
+      let capturedUIContext: any = null
+
+      mockSession.bindExtensions.mockImplementation(async (opts: any) => {
+        capturedUIContext = opts.uiContext
+      })
+
+      mockSession.subscribe.mockImplementation((listener: any) => {
+        setTimeout(() => {
+          listener({ type: 'agent_start' })
+          setTimeout(() => {
+            if (capturedUIContext) {
+              capturedUIContext.notify('Agent task-xyz-789 completed: Fixed the bug', 'success')
+            }
+          }, 5)
+          setTimeout(() => {
+            listener({ type: 'agent_end', messages: [] })
+          }, 20)
+        }, 10)
+        return vi.fn()
+      })
+
+      mockSession.prompt.mockImplementation(async () => {
+        await new Promise((r) => setTimeout(r, 50))
+      })
+
+      await agentBridge.createSession('notify-1')
+      const events: agentBridge.AgentEvent[] = []
+
+      for await (const event of agentBridge.sendMessage('notify-1', 'test')) {
+        events.push(event)
+      }
+
+      const completeEvents = events.filter((e) => e.type === 'subagent_complete')
+      expect(completeEvents).toHaveLength(1)
+      
+      if (completeEvents[0]?.type === 'subagent_complete') {
+        expect(completeEvents[0].taskId).toBe('task-xyz-789')
+        expect(completeEvents[0].description).toBe('Fixed the bug')
+        expect(completeEvents[0].success).toBe(true)
+      }
+    })
+
+    it('emits subagent_complete with success=false when notify is called with failure message', async () => {
+      let capturedUIContext: any = null
+
+      mockSession.bindExtensions.mockImplementation(async (opts: any) => {
+        capturedUIContext = opts.uiContext
+      })
+
+      mockSession.subscribe.mockImplementation((listener: any) => {
+        setTimeout(() => {
+          listener({ type: 'agent_start' })
+          setTimeout(() => {
+            if (capturedUIContext) {
+              capturedUIContext.notify('Agent task-fail-123 failed: Timeout exceeded', 'error')
+            }
+          }, 5)
+          setTimeout(() => {
+            listener({ type: 'agent_end', messages: [] })
+          }, 20)
+        }, 10)
+        return vi.fn()
+      })
+
+      mockSession.prompt.mockImplementation(async () => {
+        await new Promise((r) => setTimeout(r, 50))
+      })
+
+      await agentBridge.createSession('notify-fail-1')
+      const events: agentBridge.AgentEvent[] = []
+
+      for await (const event of agentBridge.sendMessage('notify-fail-1', 'test')) {
+        events.push(event)
+      }
+
+      const completeEvents = events.filter((e) => e.type === 'subagent_complete')
+      expect(completeEvents).toHaveLength(1)
+      
+      if (completeEvents[0]?.type === 'subagent_complete') {
+        expect(completeEvents[0].taskId).toBe('task-fail-123')
+        expect(completeEvents[0].description).toBe('Timeout exceeded')
+        expect(completeEvents[0].success).toBe(false)
+      }
+    })
+
     it('handles prompt errors gracefully', async () => {
       mockSession.subscribe.mockImplementation(() => vi.fn())
       mockSession.prompt.mockRejectedValue(new Error('API rate limit'))

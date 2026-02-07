@@ -3,6 +3,7 @@ import { z } from 'zod'
 import * as agentBridgeService from '../services/agentBridgeService'
 import * as sessionService from '../services/sessionService'
 import * as sessionRepo from '../repositories/sessionRepository'
+import * as subagentRepo from '../repositories/subagentRepository'
 import logger from '@shared/util/logger'
 
 /**
@@ -224,6 +225,80 @@ streamRouter.post('/generate', async (req: Request, res: Response): Promise<void
           })
           // Increment compaction count in the database
           await sessionRepo.incrementCompactionCount(sessionId)
+          break
+
+        case 'subagent_spawn':
+          // Create subagent record in DB
+          try {
+            await subagentRepo.createSubagent({
+              sessionId,
+              description: event.description,
+              tier: event.tier,
+              status: 'running',
+            })
+            logger.debug({ sessionId, description: event.description }, 'Created subagent record')
+          } catch (err) {
+            logger.error({ err, sessionId }, 'Failed to create subagent record')
+          }
+          // Send SSE event to client
+          sendSSE(res, 'subagent_spawn', {
+            toolCallId: event.toolCallId,
+            description: event.description,
+            tier: event.tier,
+          })
+          break
+
+        case 'subagent_result':
+          // Update subagent with taskId from Sirdar
+          if (event.taskId) {
+            try {
+              // Find the most recent running subagent without a taskId
+              const subagents = await subagentRepo.listSubagentsBySession(sessionId)
+              const runningSubagent = subagents
+                .reverse() // Most recent first
+                .find(s => s.status === 'running' && !s.taskId)
+              
+              if (runningSubagent) {
+                await subagentRepo.updateSubagentTaskId(runningSubagent.id, event.taskId)
+                logger.debug({ sessionId, taskId: event.taskId }, 'Updated subagent with taskId')
+              }
+            } catch (err) {
+              logger.error({ err, sessionId, taskId: event.taskId }, 'Failed to update subagent with taskId')
+            }
+          }
+          sendSSE(res, 'subagent_result', {
+            toolCallId: event.toolCallId,
+            taskId: event.taskId,
+            status: event.status,
+          })
+          break
+
+        case 'subagent_output':
+          // Don't persist - too noisy. Just stream to client.
+          sendSSE(res, 'subagent_output', {
+            lines: event.lines,
+          })
+          break
+
+        case 'subagent_complete':
+          // Update subagent status
+          try {
+            const subagent = await subagentRepo.getSubagentByTaskId(event.taskId)
+            if (subagent) {
+              await subagentRepo.updateSubagentStatus(
+                subagent.id,
+                event.success ? 'completed' : 'failed',
+              )
+              logger.debug({ sessionId, taskId: event.taskId }, 'Updated subagent status')
+            }
+          } catch (err) {
+            logger.error({ err, sessionId, taskId: event.taskId }, 'Failed to update subagent status')
+          }
+          sendSSE(res, 'subagent_complete', {
+            taskId: event.taskId,
+            description: event.description,
+            success: event.success,
+          })
           break
 
         case 'agent_start':

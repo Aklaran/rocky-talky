@@ -79,6 +79,18 @@ export interface SessionListItem {
   messageCount: number
 }
 
+export interface SubagentOutput {
+  id: string
+  sessionId: string
+  taskId: string | null
+  description: string
+  status: SubagentStatus
+  tier: string | null
+  output: string | null
+  createdAt: string
+  completedAt: string | null
+}
+
 export interface SessionDetail {
   id: string
   title: string | null
@@ -90,6 +102,7 @@ export interface SessionDetail {
   createdAt: string
   updatedAt: string
   messages: MessageOutput[]
+  subagents: SubagentOutput[]
 }
 
 // =============================================================================

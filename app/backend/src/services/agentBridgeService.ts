@@ -65,6 +65,33 @@ export interface AgentEventCompactionEnd {
   error?: string
 }
 
+export interface AgentEventSubagentSpawn {
+  type: 'subagent_spawn'
+  toolCallId: string
+  description: string
+  tier: string
+  prompt: string
+}
+
+export interface AgentEventSubagentResult {
+  type: 'subagent_result'
+  toolCallId: string
+  taskId: string | null
+  status: string
+}
+
+export interface AgentEventSubagentOutput {
+  type: 'subagent_output'
+  lines: string[]
+}
+
+export interface AgentEventSubagentComplete {
+  type: 'subagent_complete'
+  taskId: string
+  description: string
+  success: boolean
+}
+
 export type AgentEvent =
   | AgentEventText
   | AgentEventToolStart
@@ -75,6 +102,10 @@ export type AgentEvent =
   | AgentEventAgentEnd
   | AgentEventCompactionStart
   | AgentEventCompactionEnd
+  | AgentEventSubagentSpawn
+  | AgentEventSubagentResult
+  | AgentEventSubagentOutput
+  | AgentEventSubagentComplete
 
 // We store the Pi session as `any` since the type comes from a dynamic import
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -82,6 +113,7 @@ export interface AgentSessionInfo {
   sessionId: string
   piSession: any // AgentSession from Pi SDK
   createdAt: Date
+  eventEmitter: ((event: AgentEvent) => void) | null
 }
 
 // =============================================================================
@@ -181,9 +213,38 @@ export async function createSession(sessionId: string): Promise<AgentSessionInfo
     // in their session_start handler.
     await session.bindExtensions({
       uiContext: {
-        notify: (_msg: string, _level?: string) => {},
+        notify: (msg: string, _level?: string) => {
+          // Parse Sirdar agent completion notifications
+          // Format: "Agent task-xyz completed: description" or "Agent task-xyz failed: description"
+          const completedMatch = msg.match(/Agent (task-[^\s]+) completed: (.+)/)
+          const failedMatch = msg.match(/Agent (task-[^\s]+) failed: (.+)/)
+          
+          if (completedMatch && info.eventEmitter) {
+            info.eventEmitter({
+              type: 'subagent_complete',
+              taskId: completedMatch[1],
+              description: completedMatch[2],
+              success: true,
+            })
+          } else if (failedMatch && info.eventEmitter) {
+            info.eventEmitter({
+              type: 'subagent_complete',
+              taskId: failedMatch[1],
+              description: failedMatch[2],
+              success: false,
+            })
+          }
+        },
         setStatus: (_key: string, _value: string | undefined) => {},
-        setWidget: (_key: string, _value: string[] | undefined) => {},
+        setWidget: (key: string, value: string[] | undefined) => {
+          // Capture subagent output widgets from Sirdar
+          if (key && value && info.eventEmitter) {
+            info.eventEmitter({
+              type: 'subagent_output',
+              lines: value,
+            })
+          }
+        },
         setFooter: (_key: string, _value: string | undefined) => {},
         setHeader: (_key: string, _value: string | undefined) => {},
         setTitle: (_value: string) => {},
@@ -209,6 +270,7 @@ export async function createSession(sessionId: string): Promise<AgentSessionInfo
       sessionId,
       piSession: session,
       createdAt: new Date(),
+      eventEmitter: null,
     }
 
     activeSessions.set(sessionId, info)
@@ -260,6 +322,9 @@ export async function* sendMessage(
     }
   }
 
+  // Set the event emitter so UI context callbacks can push events
+  sessionInfo.eventEmitter = pushEvent
+
   let fullText = ''
 
   const unsub = piSession.subscribe((event: any) => {
@@ -286,6 +351,14 @@ export async function* sendMessage(
         // Detect subagent spawning
         if (event.toolName === 'spawn_agent') {
           logger.info({ sessionId, args: event.args }, 'Detected subagent spawn')
+          const args = event.args as any
+          pushEvent({
+            type: 'subagent_spawn',
+            toolCallId: event.toolCallId,
+            description: args.description || '',
+            tier: args.tier || 'standard',
+            prompt: args.prompt || '',
+          })
         }
         break
 
@@ -296,6 +369,19 @@ export async function* sendMessage(
           toolName: event.toolName,
           isError: event.isError || false,
         })
+        // Parse subagent result
+        if (event.toolName === 'spawn_agent' && !event.isError) {
+          const resultText = String(event.result || '')
+          const taskIdMatch = resultText.match(/Task ID:\s*([^\s\n]+)/)
+          const statusMatch = resultText.match(/Status:\s*([^\s\n]+)/)
+          
+          pushEvent({
+            type: 'subagent_result',
+            toolCallId: event.toolCallId,
+            taskId: taskIdMatch ? taskIdMatch[1] : null,
+            status: statusMatch ? statusMatch[1] : 'unknown',
+          })
+        }
         break
 
       case 'agent_end':
@@ -350,6 +436,8 @@ export async function* sendMessage(
   } finally {
     unsub()
     await promptPromise
+    // Clear the event emitter
+    sessionInfo.eventEmitter = null
   }
 
   logger.info(
