@@ -13,31 +13,31 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
 import { Trash2, Menu } from 'lucide-react'
-import type { ConversationDetail } from '@shared/schemas/chat'
+import type { SessionDetail } from '@shared/schemas/session'
 
 /**
- * Chat header — shows conversation title and actions (delete).
+ * Session header — shows session title, tags, and actions (delete).
  * On mobile: includes hamburger menu to toggle sidebar.
  */
-interface ChatHeaderProps {
-  conversation: ConversationDetail
+interface SessionHeaderProps {
+  session: SessionDetail
   onToggleSidebar?: () => void
 }
 
-export function ChatHeader({ conversation, onToggleSidebar }: ChatHeaderProps) {
+export function SessionHeader({ session, onToggleSidebar }: SessionHeaderProps) {
   const navigate = useNavigate()
   const utils = trpc.useUtils()
 
-  const deleteConversation = trpc.chat.delete.useMutation({
+  const deleteSession = trpc.session.delete.useMutation({
     onSuccess: () => {
-      utils.chat.list.invalidate()
-      navigate({ to: '/chat' })
+      utils.session.list.invalidate()
+      navigate({ to: '/sessions' })
     },
   })
 
   return (
-    <div data-testid="chat-header" className="flex items-center justify-between border-b px-4 py-3">
-      <div className="flex items-center gap-2">
+    <div data-testid="session-header" className="flex items-center justify-between border-b px-4 py-3">
+      <div className="flex items-center gap-2 flex-1 min-w-0">
         {/* Hamburger menu - only visible on mobile */}
         {onToggleSidebar && (
           <Button
@@ -45,15 +45,32 @@ export function ChatHeader({ conversation, onToggleSidebar }: ChatHeaderProps) {
             size="icon"
             onClick={onToggleSidebar}
             title="Open menu"
-            className="md:hidden min-h-[44px] min-w-[44px]"
+            className="md:hidden min-h-[44px] min-w-[44px] shrink-0"
             data-testid="toggle-sidebar"
           >
             <Menu className="h-5 w-5" />
           </Button>
         )}
-        <h2 className="truncate text-base font-medium">
-          {conversation.title || 'New conversation'}
-        </h2>
+        
+        <div className="flex flex-col gap-1 min-w-0 flex-1">
+          <h2 className="truncate text-base font-medium">
+            {session.title || 'New session'}
+          </h2>
+          
+          {/* Tags */}
+          {session.tags.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {session.tags.map((tag) => (
+                <span
+                  key={tag}
+                  className="inline-block px-2 py-0.5 text-xs font-medium rounded bg-primary/10 text-primary"
+                >
+                  {tag}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       <AlertDialog>
@@ -61,25 +78,25 @@ export function ChatHeader({ conversation, onToggleSidebar }: ChatHeaderProps) {
           <Button 
             variant="ghost" 
             size="icon" 
-            title="Delete conversation" 
-            data-testid="delete-conversation"
-            className="min-h-[44px] min-w-[44px]"
+            title="Delete session" 
+            data-testid="delete-session"
+            className="min-h-[44px] min-w-[44px] shrink-0"
           >
             <Trash2 className="h-4 w-4 text-muted-foreground" />
           </Button>
         </AlertDialogTrigger>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete conversation?</AlertDialogTitle>
+            <AlertDialogTitle>Delete session?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete this conversation and all its messages.
+              This will permanently delete this session and all its messages.
               This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => deleteConversation.mutate({ id: conversation.id })}
+              onClick={() => deleteSession.mutate({ id: session.id })}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               Delete

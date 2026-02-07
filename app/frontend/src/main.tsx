@@ -6,7 +6,6 @@ import ReactDOM from 'react-dom/client'
 
 import './index.css'
 import { trpc, trpcClient } from './lib/trpc'
-import { AuthProvider } from './hooks/useAuth'
 
 import { routeTree } from './routeTree.gen'
 
@@ -28,9 +27,7 @@ if (!rootElement.innerHTML) {
       <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
         <trpc.Provider client={trpcClient} queryClient={queryClient}>
           <QueryClientProvider client={queryClient}>
-            <AuthProvider>
-              <RouterProvider router={router} />
-            </AuthProvider>
+            <RouterProvider router={router} />
           </QueryClientProvider>
         </trpc.Provider>
       </ThemeProvider>

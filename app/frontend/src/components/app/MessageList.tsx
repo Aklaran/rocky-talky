@@ -1,36 +1,32 @@
 import { useEffect, useRef } from 'react'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/utils'
-import { Bot, User, Loader2 } from 'lucide-react'
-import type { MessageOutput } from '@shared/schemas/chat'
+import { Bot, User, Wrench } from 'lucide-react'
+import type { MessageOutput } from '@shared/schemas/session'
 
 /**
- * Message list — displays conversation messages with auto-scroll.
+ * Message list — displays session messages with auto-scroll.
  *
  * Design decisions:
  * - User messages right-aligned, assistant messages left-aligned
  * - System messages are subtle/centered (rarely shown in UI)
- * - Auto-scrolls to bottom on new messages and during streaming
+ * - Tool messages shown with monospace font and distinct styling
+ * - Auto-scrolls to bottom on new messages
  * - Role icons for visual distinction
- * - Streaming content shown as a live-updating assistant message
  */
 interface MessageListProps {
   messages: MessageOutput[]
-  /** Partially streamed AI response (shown as typing indicator) */
-  streamingContent?: string
-  /** Whether the AI is currently streaming */
-  isStreaming?: boolean
 }
 
-export function MessageList({ messages, streamingContent, isStreaming }: MessageListProps) {
+export function MessageList({ messages }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null)
 
-  // Auto-scroll to bottom when messages change or streaming content updates
+  // Auto-scroll to bottom when messages change
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, streamingContent])
+  }, [messages])
 
-  if (messages.length === 0 && !isStreaming) {
+  if (messages.length === 0) {
     return (
       <div className="flex flex-1 items-center justify-center">
         <div className="text-center">
@@ -50,11 +46,6 @@ export function MessageList({ messages, streamingContent, isStreaming }: Message
           <MessageBubble key={message.id} message={message} />
         ))}
 
-        {/* Streaming AI response */}
-        {isStreaming && (
-          <StreamingMessage content={streamingContent || ''} />
-        )}
-
         <div ref={bottomRef} />
       </div>
     </ScrollArea>
@@ -66,6 +57,28 @@ function MessageBubble({ message }: { message: MessageOutput }) {
     return (
       <div className="py-2 text-center text-xs text-muted-foreground italic">
         {message.content}
+      </div>
+    )
+  }
+
+  if (message.role === 'tool') {
+    return (
+      <div data-testid="message-tool" className="flex gap-3">
+        {/* Tool icon */}
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-orange-500/10 text-orange-600">
+          <Wrench className="h-4 w-4" />
+        </div>
+
+        {/* Tool message content */}
+        <div className="max-w-[85%] md:max-w-[80%] rounded-lg px-4 py-2.5 bg-muted/50 border border-orange-500/20">
+          <div className="flex items-center gap-1.5 mb-1">
+            <Wrench className="h-3 w-3 text-orange-600" />
+            <span className="text-xs font-medium text-orange-600">Tool</span>
+          </div>
+          <p className="whitespace-pre-wrap text-sm leading-relaxed font-mono text-muted-foreground">
+            {message.content}
+          </p>
+        </div>
       </div>
     )
   }
@@ -104,36 +117,6 @@ function MessageBubble({ message }: { message: MessageOutput }) {
         <p className="whitespace-pre-wrap text-sm leading-relaxed">
           {message.content}
         </p>
-      </div>
-    </div>
-  )
-}
-
-/**
- * Streaming message — shows the AI response as it arrives.
- * Displays a typing indicator when content is empty (thinking).
- */
-function StreamingMessage({ content }: { content: string }) {
-  return (
-    <div data-testid="message-streaming" className="flex gap-3 flex-row">
-      {/* Avatar */}
-      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
-        <Bot className="h-4 w-4" />
-      </div>
-
-      {/* Message content */}
-      <div className="max-w-[85%] md:max-w-[80%] rounded-lg px-4 py-2.5 bg-muted text-foreground">
-        {content ? (
-          <p className="whitespace-pre-wrap text-sm leading-relaxed">
-            {content}
-            <span className="inline-block w-1.5 h-4 ml-0.5 bg-foreground/60 animate-pulse align-text-bottom" />
-          </p>
-        ) : (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            <span>Thinking...</span>
-          </div>
-        )}
       </div>
     </div>
   )

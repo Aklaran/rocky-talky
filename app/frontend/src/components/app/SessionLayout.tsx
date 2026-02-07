@@ -1,55 +1,49 @@
 import { useState, cloneElement, isValidElement } from 'react'
 import { useNavigate } from '@tanstack/react-router'
-import { useAuth } from '@/hooks/useAuth'
-import { ConversationList } from './ConversationList'
+import { SessionList } from './SessionList'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { Sheet, SheetContent } from '@/components/ui/sheet'
-import { LogOut, Plus } from 'lucide-react'
+import { Plus } from 'lucide-react'
 import { trpc } from '@/lib/trpc'
 import type { ReactNode } from 'react'
 
 /**
- * Chat layout — sidebar with conversation list + main content area.
+ * Session layout — sidebar with session list + main content area.
  *
- * This is the shell for all /chat routes. The active conversation
+ * This is the shell for all /sessions routes. The active session
  * (or empty state) is rendered as children via the Outlet.
  *
  * Mobile: Sidebar is hidden by default, shown as an overlay (Sheet) when toggled.
  * Desktop: Sidebar always visible alongside main content.
  */
-export function ChatLayout({ children }: { children: ReactNode }) {
-  const { user, logout } = useAuth()
+export function SessionLayout({ children }: { children: ReactNode }) {
   const navigate = useNavigate()
   const utils = trpc.useUtils()
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
-  const createConversation = trpc.chat.create.useMutation({
+  const createSession = trpc.session.create.useMutation({
     onSuccess: (data) => {
-      utils.chat.list.invalidate()
-      navigate({ to: '/chat/$conversationId', params: { conversationId: data.id } })
-      // Close sidebar on mobile after creating conversation
+      utils.session.list.invalidate()
+      navigate({ to: '/sessions/$sessionId', params: { sessionId: data.id } })
+      // Close sidebar on mobile after creating session
       setSidebarOpen(false)
     },
   })
-
-  const handleLogout = async () => {
-    await logout()
-    navigate({ to: '/' })
-  }
 
   const sidebarContent = (
     <>
       {/* Sidebar header */}
       <div className="flex items-center justify-between p-4">
-        <h1 className="text-lg font-semibold">🏔️ Basecamp</h1>
+        <h1 className="text-lg font-semibold">🗻 Rocky Talky</h1>
         <Button
           variant="ghost"
           size="icon"
-          onClick={() => createConversation.mutate({})}
-          disabled={createConversation.isPending}
-          title="New conversation"
-          data-testid="new-conversation"
+          onClick={() => createSession.mutate({})}
+          disabled={createSession.isPending}
+          title="New session"
+          data-testid="new-session"
+          className="min-h-[44px] min-w-[44px]"
         >
           <Plus className="h-4 w-4" />
         </Button>
@@ -57,27 +51,9 @@ export function ChatLayout({ children }: { children: ReactNode }) {
 
       <Separator />
 
-      {/* Conversation list */}
+      {/* Session list */}
       <div className="flex-1 overflow-hidden">
-        <ConversationList onSelectConversation={() => setSidebarOpen(false)} />
-      </div>
-
-      <Separator />
-
-      {/* User footer */}
-      <div className="flex items-center justify-between p-3">
-        <span data-testid="user-email" className="truncate text-sm text-muted-foreground">
-          {user?.email}
-        </span>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={handleLogout}
-          title="Sign out"
-          data-testid="sign-out"
-        >
-          <LogOut className="h-4 w-4" />
-        </Button>
+        <SessionList onSelectSession={() => setSidebarOpen(false)} />
       </div>
     </>
   )
