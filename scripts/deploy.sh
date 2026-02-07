@@ -86,8 +86,8 @@ Environment=TRUST_PROXY=${TRUST_PROXY}
 Environment=LOG_LEVEL=${LOG_LEVEL}
 
 # Logging handled by journald
-StandardOutput=journal
-StandardError=journal
+StandardOutput=append:/tmp/rocky-talky.log
+StandardError=append:/tmp/rocky-talky.log
 SyslogIdentifier=${SERVICE_NAME}
 
 [Install]
