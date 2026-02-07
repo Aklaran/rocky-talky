@@ -58,6 +58,9 @@ export async function getSession(id: string) {
       messages: {
         orderBy: { createdAt: 'asc' },
       },
+      subagents: {
+        orderBy: { createdAt: 'asc' },
+      },
     },
   })
 }

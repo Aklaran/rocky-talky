@@ -9,6 +9,7 @@ import type {
   UpdateSessionInput,
   SendMessageInput,
   ListSessionsInput,
+  SubagentStatus,
 } from '@shared/schemas/session'
 
 /**
@@ -66,6 +67,17 @@ export async function getSession(sessionId: string): Promise<SessionDetail> {
     createdAt: session.createdAt.toISOString(),
     updatedAt: session.updatedAt.toISOString(),
     messages: session.messages.map(toMessageOutput),
+    subagents: (session.subagents || []).map((s) => ({
+      id: s.id,
+      sessionId: s.sessionId,
+      taskId: s.taskId,
+      description: s.description,
+      status: s.status as SubagentStatus,
+      tier: s.tier,
+      output: s.output,
+      createdAt: s.createdAt.toISOString(),
+      completedAt: s.completedAt?.toISOString() ?? null,
+    })),
   }
 }
 
@@ -91,6 +103,7 @@ export async function createSession(input: CreateSessionInput): Promise<SessionD
     createdAt: session.createdAt.toISOString(),
     updatedAt: session.updatedAt.toISOString(),
     messages: [],
+    subagents: [],
   }
 }
 
