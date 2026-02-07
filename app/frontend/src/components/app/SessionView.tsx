@@ -8,7 +8,6 @@ import { useAgentStream } from '@/lib/useAgentStream'
 import { useEffect, useMemo } from 'react'
 import { toast } from 'sonner'
 import type { SubagentInfo } from '@/lib/useAgentStream'
-import type { SubagentOutput } from '@shared/schemas/session'
 
 /**
  * SessionView — displays a single session with its messages and input.

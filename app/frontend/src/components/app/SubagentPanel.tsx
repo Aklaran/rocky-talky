@@ -1,5 +1,4 @@
 import { Bot, Check, X } from 'lucide-react'
-import { cn } from '@/lib/utils'
 import type { SubagentInfo } from '@/lib/useAgentStream'
 
 interface SubagentPanelProps {
