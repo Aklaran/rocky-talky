@@ -72,11 +72,15 @@ export function useAgentStream(): UseAgentStreamReturn {
         const lines = buffer.split('\n')
         buffer = lines.pop() || '' // Keep incomplete line in buffer
 
+        let currentEvent = ''
         for (const line of lines) {
-          if (!line.trim()) continue
+          if (!line.trim()) {
+            currentEvent = ''
+            continue
+          }
 
           if (line.startsWith('event: ')) {
-            // Event type is in the line, but we determine type from data shape
+            currentEvent = line.slice(7).trim()
             continue
           }
 
@@ -86,7 +90,7 @@ export function useAgentStream(): UseAgentStreamReturn {
 
             try {
               const parsed = JSON.parse(data)
-              handleSSEEvent(parsed)
+              handleSSEEvent(currentEvent, parsed)
             } catch (e) {
               console.error('Failed to parse SSE data:', data, e)
             }
@@ -105,41 +109,41 @@ export function useAgentStream(): UseAgentStreamReturn {
     }
   }, [])
 
-  function handleSSEEvent(data: any) {
-    // Determine event type from data shape
-    if ('content' in data) {
-      // text event
-      setStreamingText((prev) => prev + data.content)
-    } else if ('toolCallId' in data && 'toolName' in data && 'args' in data) {
-      // tool_start event
-      setActiveTools((prev) => [
-        ...prev,
-        {
-          toolCallId: data.toolCallId,
-          toolName: data.toolName,
-          args: data.args,
-          isComplete: false,
-          isError: false,
-        },
-      ])
-    } else if ('toolCallId' in data && 'isError' in data) {
-      // tool_end event
-      setActiveTools((prev) =>
-        prev.map((tool) =>
-          tool.toolCallId === data.toolCallId
-            ? { ...tool, isComplete: true, isError: data.isError }
-            : tool
+  function handleSSEEvent(eventType: string, data: any) {
+    switch (eventType) {
+      case 'text':
+        setStreamingText((prev) => prev + data.content)
+        break
+      case 'tool_start':
+        setActiveTools((prev) => [
+          ...prev,
+          {
+            toolCallId: data.toolCallId,
+            toolName: data.toolName,
+            args: data.args,
+            isComplete: false,
+            isError: false,
+          },
+        ])
+        break
+      case 'tool_end':
+        setActiveTools((prev) =>
+          prev.map((tool) =>
+            tool.toolCallId === data.toolCallId
+              ? { ...tool, isComplete: true, isError: data.isError }
+              : tool
+          )
         )
-      )
-    } else if ('message' in data) {
-      // done event
-      setStreamingText('')
-      setActiveTools([])
-      setIsStreaming(false)
-    } else if ('error' in data) {
-      // error event
-      setError(data.error)
-      setIsStreaming(false)
+        break
+      case 'done':
+        setStreamingText('')
+        setActiveTools([])
+        setIsStreaming(false)
+        break
+      case 'error':
+        setError(data.error)
+        setIsStreaming(false)
+        break
     }
   }
 
