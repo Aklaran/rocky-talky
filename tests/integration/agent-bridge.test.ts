@@ -63,22 +63,46 @@ describe('Agent Bridge Service', () => {
       expect(sdk.createAgentSession).toHaveBeenCalledOnce()
     })
 
-    it('calls bindExtensions after session creation for extension initialization', async () => {
+    it('calls bindExtensions after session creation', async () => {
       await agentBridge.createSession('bind-ext-1')
 
       expect(mockSession.bindExtensions).toHaveBeenCalledOnce()
-      expect(mockSession.bindExtensions).toHaveBeenCalledWith(
-        expect.objectContaining({
-          uiContext: expect.objectContaining({
-            ui: expect.objectContaining({
-              notify: expect.any(Function),
-              setStatus: expect.any(Function),
-              setWidget: expect.any(Function),
-              select: expect.any(Function),
-            }),
-          }),
-        }),
-      )
+    })
+
+    it('passes uiContext with correct ExtensionUIContext shape (not nested under .ui)', async () => {
+      await agentBridge.createSession('bind-ext-shape')
+
+      const call = mockSession.bindExtensions.mock.calls[0][0]
+      const uiContext = call.uiContext
+
+      // uiContext must BE the ExtensionUIContext, not wrap it under .ui
+      // The extension runner sets ctx.ui = uiContext, so if we nest it as
+      // { ui: { setWidget } }, then ctx.ui.setWidget becomes undefined.
+      expect(uiContext).not.toHaveProperty('ui')
+
+      // Required ExtensionUIContext methods that extensions (like Sirdar) call
+      expect(uiContext.notify).toBeInstanceOf(Function)
+      expect(uiContext.setStatus).toBeInstanceOf(Function)
+      expect(uiContext.setWidget).toBeInstanceOf(Function)
+      expect(uiContext.select).toBeInstanceOf(Function)
+      expect(uiContext.confirm).toBeInstanceOf(Function)
+      expect(uiContext.setWorkingMessage).toBeInstanceOf(Function)
+    })
+
+    it('uiContext no-ops do not throw when called', async () => {
+      await agentBridge.createSession('bind-ext-noop')
+
+      const { uiContext } = mockSession.bindExtensions.mock.calls[0][0]
+
+      // Sirdar's updateAgentWidget calls setWidget — this must not throw
+      expect(() => uiContext.setWidget('agent-output', ['line1', 'line2'])).not.toThrow()
+      expect(() => uiContext.setWidget('agent-output', undefined)).not.toThrow()
+      expect(() => uiContext.notify('test', 'info')).not.toThrow()
+      expect(() => uiContext.setStatus('key', 'value')).not.toThrow()
+      expect(() => uiContext.setStatus('key', undefined)).not.toThrow()
+      expect(() => uiContext.setWorkingMessage('loading...')).not.toThrow()
+      expect(uiContext.select('title', ['a', 'b'])).resolves.toBeUndefined()
+      expect(uiContext.confirm('sure?', 'really?')).resolves.toBe(false)
     })
 
     it('throws on duplicate session', async () => {
