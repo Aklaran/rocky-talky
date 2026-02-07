@@ -113,7 +113,8 @@ export function resetRateLimiters(): void {
 app.use('/api/auth', authRouter)
 
 // AI streaming route (REST SSE — not tRPC)
-app.use('/api/chat', streamRouter)
+// NOTE (Rocky Talky): Moved from /api/chat to /api/stream for Pi SDK agent bridge
+app.use('/api/stream', streamRouter)
 
 // tRPC API
 app.use(

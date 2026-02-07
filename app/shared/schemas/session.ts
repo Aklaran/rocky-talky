@@ -47,6 +47,7 @@ export const updateSessionSchema = z.object({
 export const sendMessageSchema = z.object({
   sessionId: z.string().cuid(),
   content: z.string().trim().min(1, 'Message cannot be empty').max(32000, 'Message too long'),
+  role: MessageRole.optional().default('user'),
 })
 
 export const listSessionsSchema = z.object({

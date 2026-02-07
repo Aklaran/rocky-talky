@@ -277,40 +277,6 @@ describe('Security hardening', () => {
   // S5: SSE stream timeout and content length limit
   // ===========================================================================
 
-  describe('S5: SSE stream safety limits', () => {
-    it('terminates stream when response exceeds max content length', async () => {
-      // Reset limiters to ensure clean state after rate-limit tests
-      resetRateLimiters()
-      const agent = await createUserWithSession('limit@test.com')
-
-      const user = await prisma.user.findUniqueOrThrow({
-        where: { email: 'limit@test.com' },
-        select: { id: true, email: true, createdAt: true },
-      })
-      const caller = createAuthenticatedCaller(user)
-
-      const convo = await caller.chat.create({})
-      await caller.chat.sendMessage({ conversationId: convo.id, content: 'Generate a lot' })
-
-      // Get the actual mock provider (AI_PROVIDER=mock in .env.test)
-      // and set a massive response that exceeds the 100k character limit.
-      // MockProvider yields word-by-word with 10ms delay per word,
-      // so we use a small number of very large "words" to stay within test timeout.
-      aiService.resetProvider()
-      const provider = aiService.getProvider() as MockProvider
-      // 20 "words" of ~6k chars each = ~120k total, 20 × 10ms = 200ms
-      provider.mockResponse = Array(20).fill('x'.repeat(6_000)).join(' ')
-
-      const res = await agent
-        .post('/api/chat/generate')
-        .send({ conversationId: convo.id })
-
-      const events = parseSSEEvents(res.text)
-      const errors = events.filter((e) => e.event === 'error')
-
-      // Should get an error about response being too long
-      expect(errors.length).toBeGreaterThanOrEqual(1)
-      expect((errors[0].data as { error: string }).error).toBe('Response too long')
-    })
-  })
+  // NOTE: SSE stream safety limits are now tested in tests/integration/stream.test.ts
+  // (Rocky Talky uses Pi SDK agent bridge, not direct OpenAI streaming)
 })

@@ -1,11 +1,11 @@
 import { Router, Request, Response } from 'express'
 import { z } from 'zod'
-import { getUserById } from '../services/authService'
-import * as chatService from '../services/chatService'
+import * as agentBridgeService from '../services/agentBridgeService'
+import * as sessionService from '../services/sessionService'
 import logger from '@shared/util/logger'
 
 /**
- * SSE streaming route for AI responses.
+ * SSE streaming route for AI responses powered by the Pi SDK agent bridge.
  *
  * Why SSE instead of tRPC subscriptions?
  * - Simpler to implement and test
@@ -14,55 +14,46 @@ import logger from '@shared/util/logger'
  * - tRPC handles all CRUD; SSE handles just streaming
  *
  * Flow:
- * 1. Client sends POST with conversationId
- * 2. Server authenticates via session cookie
- * 3. Server streams AI response as SSE events
- * 4. On completion, saves assistant message to DB
- * 5. Sends final "done" event with saved message
+ * 1. Client sends POST with sessionId
+ * 2. Server gets or creates a Pi agent session for this session
+ * 3. Server gets the latest user message from the session
+ * 4. Server sends message to Pi agent via agentBridgeService
+ * 5. Server streams AI response as SSE events
+ * 6. On completion, saves assistant message to DB
+ * 7. Sends final "done" event with saved message
+ * 8. Auto-titles session after first AI response if untitled
  *
  * Event types:
- *   event: chunk     — { content: "..." }
- *   event: done      — { message: MessageOutput }
- *   event: error     — { error: "..." }
+ *   event: text       — { content: "delta text" }
+ *   event: tool_start — { toolCallId, toolName, args }
+ *   event: tool_end   — { toolCallId, toolName, isError }
+ *   event: done       — { message: MessageOutput }
+ *   event: error      — { error: string }
+ *
+ * NOTE (Rocky Talky): No auth checks — Tailscale is the auth layer.
  */
 
 const streamRouter: Router = Router()
 
 const generateRequestSchema = z.object({
-  conversationId: z.string().min(1),
+  sessionId: z.string().cuid(),
 })
 
 /** Maximum time (ms) before a stream is forcibly terminated */
-const STREAM_TIMEOUT_MS = 120_000 // 2 minutes
+const STREAM_TIMEOUT_MS = 300_000 // 5 minutes (Pi agents can run longer)
 
 /** Maximum accumulated response length (characters) before cutting off */
 const MAX_RESPONSE_LENGTH = 100_000 // ~100k chars
 
 /**
- * POST /api/chat/generate
- * Stream an AI response for a conversation.
- *
- * Requires authentication (session cookie).
- * The conversation must belong to the authenticated user.
- * The last message in the conversation should be from the user.
+ * POST /api/stream/generate
+ * Stream an AI response for a session using the Pi SDK agent bridge.
  *
  * Safety limits:
- * - 2-minute timeout (prevents hung connections / runaway costs)
+ * - 5-minute timeout (prevents hung connections)
  * - 100k character cap (prevents unbounded token usage)
  */
 streamRouter.post('/generate', async (req: Request, res: Response): Promise<void> => {
-  // --- Auth check ---
-  if (!req.session?.userId) {
-    res.status(401).json({ error: 'Not authenticated' })
-    return
-  }
-
-  const user = await getUserById(req.session.userId)
-  if (!user) {
-    res.status(401).json({ error: 'Not authenticated' })
-    return
-  }
-
   // --- Input validation ---
   const parsed = generateRequestSchema.safeParse(req.body)
   if (!parsed.success) {
@@ -73,7 +64,23 @@ streamRouter.post('/generate', async (req: Request, res: Response): Promise<void
     return
   }
 
-  const { conversationId } = parsed.data
+  const { sessionId } = parsed.data
+
+  // --- Verify session exists ---
+  let session
+  try {
+    session = await sessionService.getSession(sessionId)
+  } catch (err) {
+    res.status(404).json({ error: 'Session not found' })
+    return
+  }
+
+  // --- Get the last user message ---
+  const lastUserMessage = await sessionService.getLastUserMessage(sessionId)
+  if (!lastUserMessage) {
+    res.status(400).json({ error: 'No user message found in session' })
+    return
+  }
 
   // --- Set up SSE ---
   res.writeHead(200, {
@@ -92,56 +99,105 @@ streamRouter.post('/generate', async (req: Request, res: Response): Promise<void
   // Enforce a maximum stream duration
   const timeout = setTimeout(() => {
     if (!aborted) {
-      logger.warn({ conversationId }, 'AI stream timed out')
+      logger.warn({ sessionId }, 'AI stream timed out')
       sendSSE(res, 'error', { error: 'Response timed out' })
       aborted = true
       res.end()
     }
   }, STREAM_TIMEOUT_MS)
 
+  let fullText = ''
+
   try {
-    const stream = chatService.generateResponseStream(conversationId, user.id)
-
-    let result = await stream.next()
-    let totalLength = 0
-
-    while (!result.done) {
-      if (aborted) {
-        logger.debug({ conversationId }, 'Client disconnected during stream')
-        break
-      }
-
-      totalLength += result.value.length
-      if (totalLength > MAX_RESPONSE_LENGTH) {
-        logger.warn({ conversationId, totalLength }, 'AI response exceeded max length')
-        sendSSE(res, 'error', { error: 'Response too long' })
-        break
-      }
-
-      // Send chunk event
-      sendSSE(res, 'chunk', { content: result.value })
-      result = await stream.next()
+    // --- Get or create Pi agent session ---
+    let agentSession = agentBridgeService.getSession(sessionId)
+    if (!agentSession) {
+      logger.info({ sessionId }, 'Creating new Pi agent session')
+      agentSession = await agentBridgeService.createSession(sessionId)
     }
 
-    // result.done is true — result.value is the saved message
-    if (result.done && result.value && !aborted) {
-      sendSSE(res, 'done', { message: result.value })
+    // --- Stream response from agent ---
+    const eventStream = agentBridgeService.sendMessage(sessionId, lastUserMessage)
+
+    for await (const event of eventStream) {
+      if (aborted) {
+        logger.debug({ sessionId }, 'Client disconnected during stream')
+        break
+      }
+
+      switch (event.type) {
+        case 'text':
+          fullText += event.content
+          if (fullText.length > MAX_RESPONSE_LENGTH) {
+            logger.warn({ sessionId, totalLength: fullText.length }, 'AI response exceeded max length')
+            sendSSE(res, 'error', { error: 'Response too long' })
+            aborted = true
+            break
+          }
+          sendSSE(res, 'text', { content: event.content })
+          break
+
+        case 'tool_start':
+          sendSSE(res, 'tool_start', {
+            toolCallId: event.toolCallId,
+            toolName: event.toolName,
+            args: event.args,
+          })
+          break
+
+        case 'tool_end':
+          sendSSE(res, 'tool_end', {
+            toolCallId: event.toolCallId,
+            toolName: event.toolName,
+            isError: event.isError,
+          })
+          break
+
+        case 'completion':
+          fullText = event.fullText // Use the full text from completion event
+          break
+
+        case 'error':
+          logger.error({ sessionId, error: event.error }, 'Agent error during streaming')
+          sendSSE(res, 'error', { error: event.error })
+          aborted = true
+          break
+
+        case 'agent_start':
+        case 'agent_end':
+          // These events are internal; don't send to client
+          break
+      }
+
+      if (aborted) break
+    }
+
+    // --- Save assistant message ---
+    if (!aborted && fullText) {
+      const savedMessage = await sessionService.sendMessage({
+        sessionId,
+        content: fullText,
+        role: 'assistant',
+      })
+
+      // --- Auto-title session after first AI response ---
+      if (!session.title) {
+        const autoTitle = lastUserMessage.slice(0, 50) + (lastUserMessage.length > 50 ? '…' : '')
+        await sessionService.updateSession(sessionId, { id: sessionId, title: autoTitle })
+        logger.debug({ sessionId, title: autoTitle }, 'Auto-titled session')
+      }
+
+      sendSSE(res, 'done', { message: savedMessage })
+      logger.info({ sessionId, responseLength: fullText.length }, 'AI response completed')
     }
   } catch (err: unknown) {
-    const errorCode = (err as { code?: string })?.code
-
-    // Don't leak internal errors to client
-    if (errorCode === 'NOT_FOUND') {
-      sendSSE(res, 'error', { error: 'Conversation not found' })
-    } else {
-      logger.error({ err, conversationId }, 'AI stream error')
+    logger.error({ err, sessionId }, 'AI stream error')
+    if (!aborted) {
       sendSSE(res, 'error', { error: 'Failed to generate response' })
     }
   } finally {
     clearTimeout(timeout)
-    if (!aborted) {
-      res.end()
-    }
+    res.end()
   }
 })
 

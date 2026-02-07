@@ -138,7 +138,8 @@ export async function deleteSession(sessionId: string): Promise<void> {
 }
 
 /**
- * Send a user message to a session. Returns the stored user message.
+ * Send a message to a session. Returns the stored message.
+ * Role defaults to 'user' if not specified.
  */
 export async function sendMessage(input: SendMessageInput): Promise<MessageOutput> {
   // Verify session exists
@@ -148,18 +149,29 @@ export async function sendMessage(input: SendMessageInput): Promise<MessageOutpu
     throw new TRPCError({ code: 'NOT_FOUND', message: 'Session not found' })
   }
 
-  // Store the user's message
-  const message = await sessionRepo.addMessage(input.sessionId, 'user', input.content)
+  const role = input.role || 'user'
 
-  // Auto-generate title from first message if session has no title
-  if (!session.title && session.messages.length === 0) {
+  // Store the message
+  const message = await sessionRepo.addMessage(input.sessionId, role, input.content)
+
+  // Auto-generate title from first user message if session has no title
+  if (!session.title && session.messages.length === 0 && role === 'user') {
     const autoTitle = input.content.slice(0, 80) + (input.content.length > 80 ? '…' : '')
     await sessionRepo.updateSession(input.sessionId, { title: autoTitle })
   }
 
-  logger.debug({ sessionId: input.sessionId, messageId: message.id }, 'Message sent')
+  logger.debug({ sessionId: input.sessionId, messageId: message.id, role }, 'Message sent')
 
   return toMessageOutput(message)
+}
+
+/**
+ * Get the most recent user message content for a session.
+ * Returns null if no user messages exist.
+ */
+export async function getLastUserMessage(sessionId: string): Promise<string | null> {
+  const message = await sessionRepo.getLastUserMessage(sessionId)
+  return message?.content || null
 }
 
 // =============================================================================

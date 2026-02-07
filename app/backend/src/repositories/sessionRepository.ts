@@ -136,3 +136,17 @@ export async function getMessages(sessionId: string) {
     orderBy: { createdAt: 'asc' },
   })
 }
+
+/**
+ * Get the most recent user message for a session.
+ * Returns null if no user messages exist.
+ */
+export async function getLastUserMessage(sessionId: string) {
+  return prisma.sessionMessage.findFirst({
+    where: { 
+      sessionId,
+      role: 'user',
+    },
+    orderBy: { createdAt: 'desc' },
+  })
+}
