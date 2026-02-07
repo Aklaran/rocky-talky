@@ -1,4 +1,5 @@
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
+import { trpc } from './trpc'
 
 /**
  * useAgentStream — handles SSE streaming from the backend.
@@ -45,6 +46,76 @@ export function useAgentStream(): UseAgentStreamReturn {
   const [subagents, setSubagents] = useState<SubagentInfo[]>([])
   const [error, setError] = useState<string | null>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const currentSessionIdRef = useRef<string | null>(null)
+
+  // Clean up polling interval on unmount
+  useEffect(() => {
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current)
+        pollingIntervalRef.current = null
+      }
+    }
+  }, [])
+
+  /**
+   * Start polling for subagent status updates.
+   * Called when stream ends with running/spawning subagents.
+   */
+  const startPolling = useCallback((sessionId: string) => {
+    // Stop any existing polling
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current)
+    }
+
+    const pollSubagents = async () => {
+      try {
+        const backendSubagents = await trpc.session.subagents.query({ sessionId })
+        
+        // Update subagent state with backend data
+        setSubagents(prevSubagents => {
+          return prevSubagents.map(subagent => {
+            const backendSubagent = backendSubagents.find(
+              bs => bs.taskId === subagent.taskId
+            )
+            if (backendSubagent) {
+              return {
+                ...subagent,
+                status: backendSubagent.status as SubagentInfo['status'],
+              }
+            }
+            return subagent
+          })
+        })
+
+        // Check if all subagents are done
+        const allDone = backendSubagents.every(
+          s => s.status === 'completed' || s.status === 'failed'
+        )
+
+        if (allDone && pollingIntervalRef.current) {
+          clearInterval(pollingIntervalRef.current)
+          pollingIntervalRef.current = null
+        }
+      } catch (err) {
+        console.error('Failed to poll subagent status:', err)
+      }
+    }
+
+    // Start polling every 3 seconds
+    pollingIntervalRef.current = setInterval(pollSubagents, 3000)
+  }, [])
+
+  /**
+   * Stop polling for subagent updates.
+   */
+  const stopPolling = useCallback(() => {
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current)
+      pollingIntervalRef.current = null
+    }
+  }, [])
 
   const sendAndStream = useCallback(async (sessionId: string) => {
     // Reset state
@@ -54,6 +125,10 @@ export function useAgentStream(): UseAgentStreamReturn {
     setActiveTools([])
     setSubagents([])
     setError(null)
+    currentSessionIdRef.current = sessionId
+
+    // Stop any existing polling
+    stopPolling()
 
     // Create abort controller for cleanup
     abortControllerRef.current = new AbortController()
@@ -122,7 +197,7 @@ export function useAgentStream(): UseAgentStreamReturn {
     } finally {
       setIsStreaming(false)
     }
-  }, [])
+  }, [stopPolling, startPolling])
 
   function handleSSEEvent(eventType: string, data: any) {
     switch (eventType) {
@@ -198,6 +273,20 @@ export function useAgentStream(): UseAgentStreamReturn {
         setStreamingText('')
         setActiveTools([])
         setIsStreaming(false)
+        
+        // Check if any subagents are still running/spawning
+        // If so, start polling for status updates
+        setSubagents(prevSubagents => {
+          const hasRunningSubagents = prevSubagents.some(
+            s => s.status === 'running' || s.status === 'spawning'
+          )
+          
+          if (hasRunningSubagents && currentSessionIdRef.current) {
+            startPolling(currentSessionIdRef.current)
+          }
+          
+          return prevSubagents
+        })
         break
       case 'error':
         setError(data.error)

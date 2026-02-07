@@ -55,6 +55,10 @@ export const listSessionsSchema = z.object({
   status: SessionStatus.optional(),
 })
 
+export const getSubagentsSchema = z.object({
+  sessionId: z.string().cuid(),
+})
+
 // =============================================================================
 // Output Types (what the API returns)
 // =============================================================================
@@ -115,3 +119,4 @@ export type DeleteSessionInput = z.infer<typeof deleteSessionSchema>
 export type UpdateSessionInput = z.infer<typeof updateSessionSchema>
 export type SendMessageInput = z.infer<typeof sendMessageSchema>
 export type ListSessionsInput = z.infer<typeof listSessionsSchema>
+export type GetSubagentsInput = z.infer<typeof getSubagentsSchema>

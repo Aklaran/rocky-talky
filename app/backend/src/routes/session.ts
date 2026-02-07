@@ -6,8 +6,10 @@ import {
   updateSessionSchema,
   sendMessageSchema,
   listSessionsSchema,
+  getSubagentsSchema,
 } from '@shared/schemas/session'
 import * as sessionService from '../services/sessionService'
+import * as subagentRepo from '../repositories/subagentRepository'
 
 /**
  * Session router — all procedures use publicProcedure.
@@ -65,5 +67,26 @@ export const sessionRouter = router({
    */
   sendMessage: publicProcedure.input(sendMessageSchema).mutation(async ({ input }) => {
     return sessionService.sendMessage(input)
+  }),
+
+  /**
+   * Get all subagents for a session.
+   * Used for polling completion status after SSE stream ends.
+   */
+  subagents: publicProcedure.input(getSubagentsSchema).query(async ({ input }) => {
+    const subagents = await subagentRepo.listSubagentsBySession(input.sessionId)
+    
+    // Map Prisma records to output schema
+    return subagents.map(subagent => ({
+      id: subagent.id,
+      sessionId: subagent.sessionId,
+      taskId: subagent.taskId,
+      description: subagent.description,
+      status: subagent.status,
+      tier: subagent.tier,
+      output: subagent.output,
+      createdAt: subagent.createdAt.toISOString(),
+      completedAt: subagent.completedAt ? subagent.completedAt.toISOString() : null,
+    }))
   }),
 })

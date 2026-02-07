@@ -12,6 +12,7 @@
  */
 
 import logger from '@shared/util/logger'
+import * as subagentRepo from '../repositories/subagentRepository'
 
 // =============================================================================
 // Types
@@ -219,20 +220,56 @@ export async function createSession(sessionId: string): Promise<AgentSessionInfo
           const completedMatch = msg.match(/Agent (task-[^\s]+) completed: (.+)/)
           const failedMatch = msg.match(/Agent (task-[^\s]+) failed: (.+)/)
           
-          if (completedMatch && info.eventEmitter) {
-            info.eventEmitter({
-              type: 'subagent_complete',
-              taskId: completedMatch[1],
-              description: completedMatch[2],
-              success: true,
-            })
-          } else if (failedMatch && info.eventEmitter) {
-            info.eventEmitter({
-              type: 'subagent_complete',
-              taskId: failedMatch[1],
-              description: failedMatch[2],
-              success: false,
-            })
+          if (completedMatch) {
+            const taskId = completedMatch[1]
+            const description = completedMatch[2]
+            
+            // Emit event to stream (if connected)
+            if (info.eventEmitter) {
+              info.eventEmitter({
+                type: 'subagent_complete',
+                taskId,
+                description,
+                success: true,
+              })
+            }
+            
+            // CRITICAL: Persist to DB directly (SSE stream may be closed)
+            // The notify() callback fires AFTER the main agent stream ends,
+            // so the event queue may not be consumed.
+            subagentRepo.getSubagentByTaskId(taskId)
+              .then(subagent => {
+                if (subagent) {
+                  return subagentRepo.updateSubagentStatus(subagent.id, 'completed')
+                }
+              })
+              .catch(err => {
+                logger.error({ err, taskId }, 'Failed to persist subagent completion in notify()')
+              })
+          } else if (failedMatch) {
+            const taskId = failedMatch[1]
+            const description = failedMatch[2]
+            
+            // Emit event to stream (if connected)
+            if (info.eventEmitter) {
+              info.eventEmitter({
+                type: 'subagent_complete',
+                taskId,
+                description,
+                success: false,
+              })
+            }
+            
+            // CRITICAL: Persist to DB directly (SSE stream may be closed)
+            subagentRepo.getSubagentByTaskId(taskId)
+              .then(subagent => {
+                if (subagent) {
+                  return subagentRepo.updateSubagentStatus(subagent.id, 'failed')
+                }
+              })
+              .catch(err => {
+                logger.error({ err, taskId }, 'Failed to persist subagent failure in notify()')
+              })
           }
         },
         setStatus: (_key: string, _value: string | undefined) => {},
