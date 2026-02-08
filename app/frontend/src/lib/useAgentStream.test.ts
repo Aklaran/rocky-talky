@@ -392,3 +392,83 @@ describe('useAgentStream - subagent polling after stream ends', () => {
     expect(trpc.session.subagents.query).not.toHaveBeenCalled()
   }, 6000)
 })
+
+describe('useAgentStream - error recovery', () => {
+  beforeEach(() => {
+    global.fetch = vi.fn()
+  })
+
+  it('should NOT set error state when stream drops mid-response with partial text', async () => {
+    const encoder = new TextEncoder()
+    const mockStream = new ReadableStream({
+      async start(controller) {
+        // Send some text
+        controller.enqueue(encoder.encode('event: text\ndata: {"content":"Hello world, this is a partial"}\n\n'))
+        // Simulate stream disconnect with an error (network issue)
+        controller.error(new Error('Network connection lost'))
+      }
+    })
+
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      body: mockStream,
+    })
+
+    const { result } = renderHook(() => useAgentStream())
+    
+    await result.current.sendAndStream('session-123')
+
+    await waitFor(() => {
+      expect(result.current.isStreaming).toBe(false)
+    })
+
+    // Should NOT have an error since we got partial text
+    expect(result.current.error).toBeNull()
+    
+    // Streaming text should still be visible (not cleared)
+    expect(result.current.streamingText).toBe('Hello world, this is a partial')
+  })
+
+  it('should set error state when connection fails with NO text received', async () => {
+    // Simulate a complete connection failure
+    global.fetch = vi.fn().mockRejectedValue(new Error('Network error'))
+
+    const { result } = renderHook(() => useAgentStream())
+    
+    await result.current.sendAndStream('session-123')
+
+    await waitFor(() => {
+      expect(result.current.isStreaming).toBe(false)
+    })
+
+    // Should have an error since we never got any text
+    expect(result.current.error).toBe('Network error')
+  })
+
+  it('should set error state when stream errors before any text', async () => {
+    const encoder = new TextEncoder()
+    const mockStream = new ReadableStream({
+      start(controller) {
+        // Immediately send error event without any text
+        controller.enqueue(encoder.encode('event: error\ndata: {"error":"Server error"}\n\n'))
+        controller.close()
+      }
+    })
+
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      body: mockStream,
+    })
+
+    const { result } = renderHook(() => useAgentStream())
+    
+    await result.current.sendAndStream('session-123')
+
+    await waitFor(() => {
+      expect(result.current.isStreaming).toBe(false)
+    })
+
+    // Should have error since we never got any text
+    expect(result.current.error).toBe('Server error')
+  })
+})
