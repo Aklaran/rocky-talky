@@ -63,6 +63,7 @@ DATABASE_URL="$DATABASE_URL" npx prisma migrate deploy
 echo ""
 echo "⚙️  Installing systemd service..."
 mkdir -p "$HOME/.config/systemd/user"
+mkdir -p "$HOME/.local/state/rocky-talky"
 
 cat > "$HOME/.config/systemd/user/${SERVICE_NAME}.service" << EOF
 [Unit]
@@ -86,8 +87,8 @@ Environment=TRUST_PROXY=${TRUST_PROXY}
 Environment=LOG_LEVEL=${LOG_LEVEL}
 
 # Logging handled by journald
-StandardOutput=append:/tmp/rocky-talky.log
-StandardError=append:/tmp/rocky-talky.log
+StandardOutput=append:$HOME/.local/state/rocky-talky/rocky-talky.log
+StandardError=append:$HOME/.local/state/rocky-talky/rocky-talky.log
 SyslogIdentifier=${SERVICE_NAME}
 
 [Install]
