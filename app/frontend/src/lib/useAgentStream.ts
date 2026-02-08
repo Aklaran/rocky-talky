@@ -192,8 +192,18 @@ export function useAgentStream(): UseAgentStreamReturn {
         // Stream was aborted, not an error
         return
       }
-      console.error('Stream error:', err)
-      setError(err instanceof Error ? err.message : 'Stream failed')
+      
+      // If we got partial text before the error, this is a mid-stream disconnect.
+      // The backend has already saved the partial response to the DB.
+      // Don't show error - just stop streaming and leave the partial text visible.
+      if (streamingText) {
+        console.warn('Stream disconnected mid-response, partial text preserved:', streamingText.length, 'chars')
+        // Don't set error - the partial text is still valid and saved server-side
+      } else {
+        // No text received at all - this is a total failure
+        console.error('Stream error:', err)
+        setError(err instanceof Error ? err.message : 'Stream failed')
+      }
     } finally {
       setIsStreaming(false)
     }

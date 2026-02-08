@@ -116,6 +116,14 @@ streamRouter.post('/generate', async (req: Request, res: Response): Promise<void
     }
   }, STREAM_TIMEOUT_MS)
 
+  // Send keepalive heartbeat every 15 seconds to prevent connection timeout
+  // SSE comments (lines starting with ':') are ignored by EventSource
+  const keepaliveInterval = setInterval(() => {
+    if (!aborted) {
+      res.write(': keepalive\n\n')
+    }
+  }, 15000)
+
   let fullText = ''
   let assistantMessageId: string | null = null
   let lastFlushTime = 0
@@ -347,6 +355,7 @@ streamRouter.post('/generate', async (req: Request, res: Response): Promise<void
     }
   } finally {
     clearTimeout(timeout)
+    clearInterval(keepaliveInterval)
 
     // Final safety flush — if aborted mid-stream, save what we have
     if (fullText && fullText.length > lastFlushedLength) {

@@ -819,4 +819,110 @@ describe('SSE Streaming (/api/stream/generate)', () => {
       })
     })
   })
+
+  describe('SSE keepalive heartbeat', () => {
+    it('sends keepalive comments during long operations', async () => {
+      const session = await prisma.session.create({
+        data: { title: null },
+      })
+
+      await prisma.sessionMessage.create({
+        data: {
+          sessionId: session.id,
+          role: 'user',
+          content: 'Long running task',
+        },
+      })
+
+      // Mock a long-running operation (20 seconds)
+      // Keepalive interval is 15 seconds, so we should get at least 1 keepalive
+      const mockEvents: AgentEvent[] = [
+        { type: 'text', content: 'Starting...' },
+        {
+          type: 'tool_start',
+          toolCallId: 'tool-1',
+          toolName: 'long_task',
+          args: {},
+        },
+        // Simulate 20 second delay - this is represented by the test timeout
+        // In real implementation, the keepalive interval will fire during this time
+      ]
+
+      mockGetSession.mockReturnValue(null)
+      mockCreateSession.mockResolvedValue({
+        sessionId: session.id,
+        piSession: {},
+        createdAt: new Date(),
+      })
+
+      // Create a mock stream that delays
+      const delayedStream = async function* () {
+        yield mockEvents[0]
+        yield mockEvents[1]
+        // Simulate 20 second tool execution
+        await new Promise(resolve => setTimeout(resolve, 20000))
+        yield {
+          type: 'tool_end' as const,
+          toolCallId: 'tool-1',
+          toolName: 'long_task',
+          isError: false,
+        }
+        yield { type: 'text' as const, content: 'Done!' }
+        yield { type: 'completion' as const, fullText: 'Starting...Done!' }
+      }
+
+      mockSendMessage.mockReturnValue(delayedStream())
+
+      const res = await supertest(app)
+        .post('/api/stream/generate')
+        .send({ sessionId: session.id })
+        .timeout(25000)
+        .expect(200)
+
+      // Check for keepalive comments in the raw response
+      // Keepalive comments are lines starting with ':'
+      const keepaliveComments = res.text.match(/^: keepalive$/gm) || []
+      
+      // Should have at least 1 keepalive (20s / 15s interval = ~1 keepalive)
+      expect(keepaliveComments.length).toBeGreaterThanOrEqual(1)
+    }, 30000)
+
+    it('stops sending keepalive when stream ends', async () => {
+      const session = await prisma.session.create({
+        data: { title: null },
+      })
+
+      await prisma.sessionMessage.create({
+        data: {
+          sessionId: session.id,
+          role: 'user',
+          content: 'Quick task',
+        },
+      })
+
+      // Mock a quick operation (< 15 seconds)
+      // Should not get any keepalive comments
+      const mockEvents: AgentEvent[] = [
+        { type: 'text', content: 'Quick response' },
+        { type: 'completion', fullText: 'Quick response' },
+      ]
+
+      mockGetSession.mockReturnValue(null)
+      mockCreateSession.mockResolvedValue({
+        sessionId: session.id,
+        piSession: {},
+        createdAt: new Date(),
+      })
+      mockSendMessage.mockReturnValue(mockAgentEventStream(mockEvents))
+
+      const res = await supertest(app)
+        .post('/api/stream/generate')
+        .send({ sessionId: session.id })
+        .expect(200)
+
+      // For a quick response, there should be no keepalive comments
+      const keepaliveComments = res.text.match(/^: keepalive$/gm) || []
+      expect(keepaliveComments.length).toBe(0)
+    })
+  })
 })
