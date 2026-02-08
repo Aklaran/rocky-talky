@@ -59,4 +59,46 @@ describe('Deploy script', () => {
       }
     }
   })
+
+  it('installs logrotate configuration', () => {
+    const scriptPath = join(__dirname, '../../scripts/deploy.sh')
+    const scriptContent = readFileSync(scriptPath, 'utf-8')
+    
+    // Check that deploy.sh installs logrotate config
+    expect(scriptContent).toContain('logrotate')
+    expect(scriptContent).toMatch(/rocky-talky-logrotate\.conf/)
+  })
+
+  it('creates systemd timer for log rotation', () => {
+    const scriptPath = join(__dirname, '../../scripts/deploy.sh')
+    const scriptContent = readFileSync(scriptPath, 'utf-8')
+    
+    // Check for timer service and timer unit
+    expect(scriptContent).toContain('rocky-talky-logrotate.service')
+    expect(scriptContent).toContain('rocky-talky-logrotate.timer')
+    expect(scriptContent).toContain('OnCalendar=hourly')
+  })
+})
+
+describe('Logrotate configuration', () => {
+  it('exists and has correct settings', () => {
+    const configPath = join(__dirname, '../../scripts/logrotate.conf')
+    const configContent = readFileSync(configPath, 'utf-8')
+    
+    // Check for key logrotate directives
+    expect(configContent).toContain('size 10M')
+    expect(configContent).toContain('rotate 3')
+    expect(configContent).toContain('compress')
+    expect(configContent).toContain('$HOME/.local/state/rocky-talky/rocky-talky.log')
+  })
+
+  it('includes postrotate script to restart service', () => {
+    const configPath = join(__dirname, '../../scripts/logrotate.conf')
+    const configContent = readFileSync(configPath, 'utf-8')
+    
+    // Check that it restarts the service after rotation
+    expect(configContent).toContain('postrotate')
+    expect(configContent).toContain('systemctl --user')
+    expect(configContent).toContain('rocky-talky.service')
+  })
 })

@@ -15,8 +15,9 @@ set -euo pipefail
 #   2. Builds backend (TypeScript) and frontend (Vite)
 #   3. Runs database migrations
 #   4. Installs/updates systemd user service
-#   5. Restarts the service
-#   6. Ensures Tailscale serve is configured
+#   5. Sets up log rotation (systemd timer)
+#   6. Restarts the service
+#   7. Ensures Tailscale serve is configured
 # =============================================================================
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -95,7 +96,45 @@ SyslogIdentifier=${SERVICE_NAME}
 WantedBy=default.target
 EOF
 
-# --- Step 5: Restart service ---
+# --- Step 5: Install log rotation ---
+echo ""
+echo "📋 Setting up log rotation..."
+mkdir -p "$HOME/.config"
+mkdir -p "$HOME/.local/state"
+
+# Install logrotate config
+# Expand $HOME in the config file during installation
+sed "s|\$HOME|$HOME|g" "$SCRIPT_DIR/logrotate.conf" > "$HOME/.config/rocky-talky-logrotate.conf"
+
+# Create systemd timer for log rotation (runs hourly)
+cat > "$HOME/.config/systemd/user/rocky-talky-logrotate.service" << EOF
+[Unit]
+Description=Rocky Talky log rotation
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/logrotate $HOME/.config/rocky-talky-logrotate.conf --state $HOME/.local/state/rocky-talky-logrotate.state
+EOF
+
+cat > "$HOME/.config/systemd/user/rocky-talky-logrotate.timer" << EOF
+[Unit]
+Description=Rocky Talky log rotation timer
+
+[Timer]
+OnCalendar=hourly
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+
+systemctl --user daemon-reload
+systemctl --user enable rocky-talky-logrotate.timer
+systemctl --user start rocky-talky-logrotate.timer
+
+echo "✅ Log rotation configured (runs hourly)"
+
+# --- Step 6: Restart service ---
 echo ""
 echo "🔄 Restarting service..."
 systemctl --user daemon-reload
@@ -112,7 +151,7 @@ else
     exit 1
 fi
 
-# --- Step 6: Tailscale serve ---
+# --- Step 7: Tailscale serve ---
 echo ""
 echo "🌐 Configuring Tailscale serve..."
 sudo tailscale serve --bg --https="$TAILSCALE_PORT" "http://127.0.0.1:${PORT}"
