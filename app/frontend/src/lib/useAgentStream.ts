@@ -48,6 +48,7 @@ export function useAgentStream(): UseAgentStreamReturn {
   const abortControllerRef = useRef<AbortController | null>(null)
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const currentSessionIdRef = useRef<string | null>(null)
+  const receivedTextRef = useRef(false)
 
   // Clean up polling interval on unmount
   useEffect(() => {
@@ -125,6 +126,7 @@ export function useAgentStream(): UseAgentStreamReturn {
     setActiveTools([])
     setSubagents([])
     setError(null)
+    receivedTextRef.current = false
     currentSessionIdRef.current = sessionId
 
     // Stop any existing polling
@@ -196,8 +198,8 @@ export function useAgentStream(): UseAgentStreamReturn {
       // If we got partial text before the error, this is a mid-stream disconnect.
       // The backend has already saved the partial response to the DB.
       // Don't show error - just stop streaming and leave the partial text visible.
-      if (streamingText) {
-        console.warn('Stream disconnected mid-response, partial text preserved:', streamingText.length, 'chars')
+      if (receivedTextRef.current) {
+        console.warn('Stream disconnected mid-response, partial text preserved')
         // Don't set error - the partial text is still valid and saved server-side
       } else {
         // No text received at all - this is a total failure
@@ -212,6 +214,7 @@ export function useAgentStream(): UseAgentStreamReturn {
   function handleSSEEvent(eventType: string, data: any) {
     switch (eventType) {
       case 'text':
+        receivedTextRef.current = true
         setStreamingText((prev) => prev + data.content)
         break
       case 'tool_start':
