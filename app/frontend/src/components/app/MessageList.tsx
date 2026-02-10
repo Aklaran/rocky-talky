@@ -41,7 +41,7 @@ export function MessageList({
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, streamingContent])
 
-  if (messages.length === 0) {
+  if (messages.length === 0 && !isStreaming) {
     return (
       <div className="flex flex-1 items-center justify-center">
         <div className="text-center">
