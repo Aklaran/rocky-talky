@@ -47,8 +47,13 @@ export function MarkdownMessage({ content, isStreaming }: MarkdownMessageProps) 
           li: ({ children }) => <li className="ml-1">{children}</li>,
 
           // Code
-          code: ({ inline, className, children, ...props }: any) => {
-            if (inline) {
+          code: ({ node, className, children, ...props }: any) => {
+            // In react-markdown v9+, inline code is NOT wrapped in <pre>
+            // Block code IS wrapped in <pre> by the pre component
+            // We detect inline by checking if there's no className (no language) and no newlines
+            const isInline = !className && !String(children).includes('\n')
+            
+            if (isInline) {
               return (
                 <code
                   className="rounded bg-muted/50 px-1.5 py-0.5 font-mono text-xs"
@@ -58,10 +63,12 @@ export function MarkdownMessage({ content, isStreaming }: MarkdownMessageProps) 
                 </code>
               )
             }
+            
+            // Block code with syntax highlighting support
             return (
               <code
                 className={cn(
-                  'block rounded-lg bg-muted/30 p-3 font-mono text-xs',
+                  'block rounded-lg bg-muted/30 p-3 font-mono text-xs leading-relaxed overflow-x-auto',
                   className
                 )}
                 {...props}
@@ -70,9 +77,26 @@ export function MarkdownMessage({ content, isStreaming }: MarkdownMessageProps) 
               </code>
             )
           },
-          pre: ({ children }) => (
-            <pre className="mb-3 overflow-x-auto">{children}</pre>
-          ),
+          pre: ({ children, ...props }: any) => {
+            // Extract language from code block className (e.g., "language-typescript")
+            const codeChild = children?.props
+            const className = codeChild?.className || ''
+            const match = /language-(\w+)/.exec(className)
+            const language = match ? match[1] : null
+            
+            return (
+              <div className="relative mb-3 group">
+                {language && (
+                  <div className="absolute right-2 top-2 rounded bg-muted px-2 py-1 text-[10px] font-mono text-muted-foreground uppercase opacity-70">
+                    {language}
+                  </div>
+                )}
+                <pre className="overflow-x-auto" {...props}>
+                  {children}
+                </pre>
+              </div>
+            )
+          },
 
           // Links
           a: ({ children, href }) => (
