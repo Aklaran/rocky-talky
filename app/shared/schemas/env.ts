@@ -36,6 +36,12 @@ export const envSchema = z.object({
   OPENAI_API_KEY: z.string().optional(),
   ANTHROPIC_API_KEY: z.string().optional(),
   AI_SYSTEM_PROMPT: z.string().optional(),
+
+  // --- Agent ---
+  // Directory containing Pi agent config (AGENTS.md, skills, extensions).
+  // Required because Rocky Talky may run as a different OS user than the agent owner,
+  // and the Pi SDK defaults to os.homedir()/.pi/agent which would be wrong.
+  AGENT_DIR: z.string().default('/Users/annapurna/.pi/agent'),
 })
 
 export type Env = z.infer<typeof envSchema>

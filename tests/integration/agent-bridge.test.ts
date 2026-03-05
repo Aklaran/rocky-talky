@@ -63,6 +63,20 @@ describe('Agent Bridge Service', () => {
       expect(sdk.createAgentSession).toHaveBeenCalledOnce()
     })
 
+    it('passes agentDir to DefaultResourceLoader so identity is loaded regardless of process user', async () => {
+      await agentBridge.createSession('agent-dir-1')
+
+      // DefaultResourceLoader must receive an explicit agentDir
+      // so the SDK finds AGENTS.md, skills, and extensions even when
+      // the process runs as a different OS user (e.g. aklaran starts dev server)
+      expect(sdk.DefaultResourceLoader).toHaveBeenCalledOnce()
+      const loaderOpts = sdk.DefaultResourceLoader.mock.calls[0][0]
+      expect(loaderOpts).toHaveProperty('agentDir')
+      expect(loaderOpts.agentDir).toBeTruthy()
+      // Must point to annapurna's config, not rely on os.homedir()
+      expect(loaderOpts.agentDir).toContain('.pi/agent')
+    })
+
     it('calls bindExtensions after session creation', async () => {
       await agentBridge.createSession('bind-ext-1')
 

@@ -202,8 +202,14 @@ export async function createSession(sessionId: string): Promise<AgentSessionInfo
 
     // Use DefaultResourceLoader to get skills, extensions, etc.
     // This picks up Annapurna from ~/.pi/agent/skills/ and Sirdar from ~/.pi/agent/extensions/
+    // Explicitly pass agentDir so the SDK finds AGENTS.md, skills, and extensions
+    // even when the process runs as a different OS user (e.g. aklaran starts dev server,
+    // but agent config lives under /Users/annapurna/.pi/agent).
+    const agentDir = process.env.AGENT_DIR || '/Users/annapurna/.pi/agent'
+
     const loader = new sdk.DefaultResourceLoader({
       cwd: process.cwd(),
+      agentDir,
     })
     await loader.reload()
 
