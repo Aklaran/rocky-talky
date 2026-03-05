@@ -35,3 +35,6 @@ playwright-report/
 # Generated
 app/frontend/src/routeTree.gen.ts
 .worktrees/
+.beads/dolt/
+.beads/*.sqlite3
+.beads/*.lock

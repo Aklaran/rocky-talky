@@ -5,6 +5,7 @@
   "description": "Full-stack AI-native template app. Clone, rename, build.",
   "scripts": {
     "dev": "./bin/dev.sh",
+    "dev:filelog": "FORCE_COLOR=1 pnpm dev 2>&1 | tee /Users/annapurna/.local/state/rocky-talky/dev.log",
     "dev:backend": "cd app/backend && pnpm dev",
     "dev:frontend": "cd app/frontend && pnpm dev",
     "build": "pnpm build:backend && pnpm build:frontend",

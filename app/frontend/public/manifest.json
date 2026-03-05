@@ -1,0 +1,16 @@
+{
+  "name": "Rocky Talky",
+  "short_name": "Rocky Talky",
+  "description": "Chat with Annapurna",
+  "start_url": "/sessions",
+  "display": "standalone",
+  "background_color": "#030711",
+  "theme_color": "#030711",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

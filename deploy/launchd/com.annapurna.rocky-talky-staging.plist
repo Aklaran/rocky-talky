@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.annapurna.rocky-talky-staging</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/opt/homebrew/bin/node</string>
+        <string>/Users/annapurna/repos/rocky-talky/app/backend/dist/backend/src/server.js</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/annapurna/repos/rocky-talky</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>NODE_ENV</key>
+        <string>production</string>
+        <key>PORT</key>
+        <string>7210</string>
+        <key>DATABASE_URL</key>
+        <string>postgresql://basecamp:basecamp_dev@localhost:5432/rocky_talky_staging</string>
+        <key>SESSION_SECRET</key>
+        <string>staging-809e1235c0b0d97dc53dfcfb46b5e1f0ea49169bfb58c24bad3e6c0cc8253ad4</string>
+        <key>COOKIE_SECURE</key>
+        <string>true</string>
+        <key>TRUST_PROXY</key>
+        <string>1</string>
+        <key>LOG_LEVEL</key>
+        <string>debug</string>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+        <key>HOME</key>
+        <string>/Users/annapurna</string>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <false/>
+
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>/Users/annapurna/.local/state/rocky-talky/staging.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/annapurna/.local/state/rocky-talky/staging.log</string>
+</dict>
+</plist>

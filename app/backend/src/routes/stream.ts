@@ -122,7 +122,7 @@ streamRouter.post('/generate', async (req: Request, res: Response): Promise<void
     if (!aborted) {
       res.write(': keepalive\n\n')
     }
-  }, 15000)
+  }, Number(process.env.KEEPALIVE_INTERVAL_MS || 15000))
 
   let fullText = ''
   let assistantMessageId: string | null = null

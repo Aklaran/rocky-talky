@@ -2,165 +2,197 @@
 set -euo pipefail
 
 # =============================================================================
-# Rocky Talky — Deploy Script
+# Rocky Talky — Deploy Script (macOS / launchd)
 # =============================================================================
-# Builds and deploys Rocky Talky as a systemd user service on the host.
-# The Pi SDK agent bridge requires native host access (filesystem, ~/.pi/),
-# so this runs directly on the machine, not in Docker.
+# Deploys Rocky Talky to dev, staging, or production on macOS.
 #
-# Usage: ./scripts/deploy.sh
+# Usage:
+#   ./scripts/deploy.sh dev       — Start Vite + Express in watch mode
+#   ./scripts/deploy.sh staging   — Build + deploy to staging (nginx :7211)
+#   ./scripts/deploy.sh prod      — Build + deploy to production (Tailscale :7200)
+#   ./scripts/deploy.sh promote   — Promote staging → production
 #
-# What it does:
-#   1. Installs dependencies
-#   2. Builds backend (TypeScript) and frontend (Vite)
-#   3. Runs database migrations
-#   4. Installs/updates systemd user service
-#   5. Sets up log rotation (systemd timer)
-#   6. Restarts the service
-#   7. Ensures Tailscale serve is configured
+# Port Map:
+#   Dev:     Vite :7205, Express :7206
+#   Staging: Express :7210, Nginx :7211
+#   Prod:    Express :7202, Nginx :7201, Tailscale :7200
 # =============================================================================
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-SERVICE_NAME="rocky-talky"
-PORT=7200
-TAILSCALE_PORT=7200
+DEPLOY_DIR="$REPO_DIR/deploy"
+LOG_DIR="$HOME/.local/state/rocky-talky"
+LAUNCH_AGENTS_DIR="$HOME/Library/LaunchAgents"
 
-# --- Environment variables (production) ---
-# These are baked into the systemd service file.
-# No .env files in production — this script is the source of truth.
-DATABASE_URL="postgresql://basecamp:basecamp_dev@localhost:5432/rocky_talky"
-SESSION_SECRET="809e1235c0b0d97dc53dfcfb46b5e1f0ea49169bfb58c24bad3e6c0cc8253ad4"
-NODE_ENV="production"
-COOKIE_SECURE="true"
-TRUST_PROXY="1"
-LOG_LEVEL="info"
+# --- Helpers ---
 
-echo "🏔️  Deploying Rocky Talky..."
-echo "   Repo: $REPO_DIR"
-echo "   Port: $PORT"
+ensure_dirs() {
+  mkdir -p "$LOG_DIR"
+  mkdir -p "$LAUNCH_AGENTS_DIR"
+}
 
-# --- Step 1: Install dependencies ---
-echo ""
-echo "📦 Installing dependencies..."
-cd "$REPO_DIR"
-pnpm install --frozen-lockfile
-
-# --- Step 2: Build ---
-echo ""
-echo "🔨 Building..."
-cd "$REPO_DIR/app/backend"
-pnpm generate  # Prisma client
-cd "$REPO_DIR"
-pnpm build     # TypeScript + Vite
-
-# --- Step 3: Database migrations ---
-echo ""
-echo "🗃️  Running database migrations..."
-cd "$REPO_DIR/app/backend"
-DATABASE_URL="$DATABASE_URL" npx prisma migrate deploy
-
-# --- Step 4: Install systemd service ---
-echo ""
-echo "⚙️  Installing systemd service..."
-mkdir -p "$HOME/.config/systemd/user"
-mkdir -p "$HOME/.local/state/rocky-talky"
-
-cat > "$HOME/.config/systemd/user/${SERVICE_NAME}.service" << EOF
-[Unit]
-Description=Rocky Talky — Mobile Chat for Annapurna
-After=network.target
-
-[Service]
-Type=simple
-WorkingDirectory=${REPO_DIR}
-ExecStart=$(which node) app/backend/dist/backend/src/server.js
-Restart=on-failure
-RestartSec=5
-
-# Environment
-Environment=NODE_ENV=${NODE_ENV}
-Environment=PORT=${PORT}
-Environment=DATABASE_URL=${DATABASE_URL}
-Environment=SESSION_SECRET=${SESSION_SECRET}
-Environment=COOKIE_SECURE=${COOKIE_SECURE}
-Environment=TRUST_PROXY=${TRUST_PROXY}
-Environment=LOG_LEVEL=${LOG_LEVEL}
-
-# Logging handled by journald
-StandardOutput=append:$HOME/.local/state/rocky-talky/rocky-talky.log
-StandardError=append:$HOME/.local/state/rocky-talky/rocky-talky.log
-SyslogIdentifier=${SERVICE_NAME}
-
-[Install]
-WantedBy=default.target
-EOF
-
-# --- Step 5: Install log rotation ---
-echo ""
-echo "📋 Setting up log rotation..."
-mkdir -p "$HOME/.config"
-mkdir -p "$HOME/.local/state"
-
-# Install logrotate config
-# Expand $HOME in the config file during installation
-sed "s|\$HOME|$HOME|g" "$SCRIPT_DIR/logrotate.conf" > "$HOME/.config/rocky-talky-logrotate.conf"
-
-# Create systemd timer for log rotation (runs hourly)
-cat > "$HOME/.config/systemd/user/rocky-talky-logrotate.service" << EOF
-[Unit]
-Description=Rocky Talky log rotation
-
-[Service]
-Type=oneshot
-ExecStart=/usr/sbin/logrotate $HOME/.config/rocky-talky-logrotate.conf --state $HOME/.local/state/rocky-talky-logrotate.state
-EOF
-
-cat > "$HOME/.config/systemd/user/rocky-talky-logrotate.timer" << EOF
-[Unit]
-Description=Rocky Talky log rotation timer
-
-[Timer]
-OnCalendar=hourly
-Persistent=true
-
-[Install]
-WantedBy=timers.target
-EOF
-
-systemctl --user daemon-reload
-systemctl --user enable rocky-talky-logrotate.timer
-systemctl --user start rocky-talky-logrotate.timer
-
-echo "✅ Log rotation configured (runs hourly)"
-
-# --- Step 6: Restart service ---
-echo ""
-echo "🔄 Restarting service..."
-systemctl --user daemon-reload
-systemctl --user enable "$SERVICE_NAME"
-systemctl --user restart "$SERVICE_NAME"
-
-# Wait a moment and check status
-sleep 2
-if systemctl --user is-active --quiet "$SERVICE_NAME"; then
-    echo "✅ ${SERVICE_NAME} is running on port ${PORT}"
-else
-    echo "❌ ${SERVICE_NAME} failed to start. Check logs:"
-    echo "   journalctl --user -u ${SERVICE_NAME} -n 20"
+check_postgres() {
+  if ! node -e "const net=require('net');const s=net.connect(5432,'localhost',()=>{s.end();process.exit(0)});s.on('error',()=>process.exit(1))" 2>/dev/null; then
+    echo "❌ Postgres not reachable on :5432. Start Docker first:"
+    echo "   docker compose up -d postgres"
     exit 1
-fi
+  fi
+}
 
-# --- Step 7: Tailscale serve ---
-echo ""
-echo "🌐 Configuring Tailscale serve..."
-sudo tailscale serve --bg --https="$TAILSCALE_PORT" "http://127.0.0.1:${PORT}"
-echo "✅ Tailscale: https://annapurna.tail63068d.ts.net:${TAILSCALE_PORT}/"
+check_nginx() {
+  if ! command -v nginx &>/dev/null; then
+    echo "❌ nginx not installed. Run: brew install nginx"
+    exit 1
+  fi
+  if ! [ -f /opt/homebrew/etc/nginx/servers/rocky-talky.conf ]; then
+    echo "❌ nginx config not installed. Run:"
+    echo "   sudo cp $DEPLOY_DIR/nginx/rocky-talky.conf /opt/homebrew/etc/nginx/servers/"
+    exit 1
+  fi
+}
 
-echo ""
-echo "🏔️  Rocky Talky deployed successfully!"
-echo ""
-echo "   Local:     http://127.0.0.1:${PORT}"
-echo "   Tailscale: https://annapurna.tail63068d.ts.net:${TAILSCALE_PORT}/"
-echo "   Logs:      journalctl --user -u ${SERVICE_NAME} -f"
-echo "   Status:    systemctl --user status ${SERVICE_NAME}"
+build_app() {
+  echo "📦 Installing dependencies..."
+  cd "$REPO_DIR"
+  pnpm install --frozen-lockfile
+
+  echo "🔨 Building..."
+  cd "$REPO_DIR/app/backend"
+  pnpm generate  # Prisma client
+  cd "$REPO_DIR"
+  pnpm build     # TypeScript + Vite
+}
+
+run_migrations() {
+  local db_url="$1"
+  echo "🗃️  Running migrations..."
+  cd "$REPO_DIR/app/backend"
+  DATABASE_URL="$db_url" npx prisma migrate deploy
+}
+
+install_service() {
+  local plist_name="$1"
+  local source="$DEPLOY_DIR/launchd/${plist_name}.plist"
+  local target="$LAUNCH_AGENTS_DIR/${plist_name}.plist"
+
+  cp "$source" "$target"
+
+  # Unload if already loaded (ignore errors if not loaded)
+  launchctl bootout "gui/$(id -u)/$plist_name" 2>/dev/null || true
+
+  # Load and start
+  launchctl bootstrap "gui/$(id -u)" "$target"
+  launchctl kickstart "gui/$(id -u)/$plist_name"
+}
+
+restart_service() {
+  local plist_name="$1"
+  launchctl kickstart -k "gui/$(id -u)/$plist_name"
+}
+
+check_service() {
+  local plist_name="$1"
+  local port="$2"
+
+  sleep 2
+  if node -e "const net=require('net');const s=net.connect($port,'localhost',()=>{s.end();process.exit(0)});s.on('error',()=>process.exit(1))" 2>/dev/null; then
+    echo "✅ $plist_name is running on port $port"
+  else
+    echo "❌ $plist_name failed to start. Check logs:"
+    echo "   tail -50 $LOG_DIR/$([ "$plist_name" = "com.annapurna.rocky-talky-staging" ] && echo staging || echo production).log"
+    exit 1
+  fi
+}
+
+ensure_nginx_running() {
+  if ! pgrep -x nginx &>/dev/null; then
+    echo "🌐 Starting nginx..."
+    nginx
+  else
+    echo "🌐 Reloading nginx..."
+    nginx -s reload
+  fi
+}
+
+# --- Commands ---
+
+case "${1:?Usage: deploy.sh <dev|staging|prod|promote>}" in
+
+  dev)
+    echo "🏔️  Starting Rocky Talky dev environment..."
+    check_postgres
+
+    cd "$REPO_DIR"
+
+    # Run migrations against dev DB
+    run_migrations "postgresql://basecamp:basecamp_dev@localhost:5432/rocky_talky_dev"
+
+    # Start backend + frontend with dev ports
+    PORT=7206 npx concurrently \
+      -n BACKEND,FRONTEND \
+      -c magenta,cyan \
+      "PORT=7206 pnpm dev:backend" \
+      "pnpm dev:frontend -- --port 7205"
+    ;;
+
+  staging)
+    echo "🏔️  Deploying Rocky Talky to staging..."
+    ensure_dirs
+    check_postgres
+    check_nginx
+
+    build_app
+    run_migrations "postgresql://basecamp:basecamp_dev@localhost:5432/rocky_talky_staging"
+
+    echo "⚙️  Installing staging service..."
+    install_service "com.annapurna.rocky-talky-staging"
+    ensure_nginx_running
+    check_service "com.annapurna.rocky-talky-staging" 7210
+
+    echo ""
+    echo "🏔️  Staging deployed!"
+    echo "   Express: http://127.0.0.1:7210"
+    echo "   Nginx:   http://127.0.0.1:7211"
+    ;;
+
+  prod)
+    echo "🏔️  Deploying Rocky Talky to production..."
+    ensure_dirs
+    check_postgres
+    check_nginx
+
+    build_app
+    run_migrations "postgresql://basecamp:basecamp_dev@localhost:5432/rocky_talky"
+
+    echo "⚙️  Installing production service..."
+    install_service "com.annapurna.rocky-talky"
+    ensure_nginx_running
+    check_service "com.annapurna.rocky-talky" 7202
+
+    # Tailscale serve (requires sudo)
+    echo "🌐 Configuring Tailscale serve..."
+    sudo tailscale serve --bg --https=7200 http://127.0.0.1:7201
+
+    echo ""
+    echo "🏔️  Production deployed!"
+    echo "   Express:   http://127.0.0.1:7202"
+    echo "   Nginx:     http://127.0.0.1:7201"
+    echo "   Tailscale: https://annapurna.tail63068d.ts.net:7200/"
+    ;;
+
+  promote)
+    echo "🏔️  Promoting staging to production..."
+    echo "   (Staging already tested — deploying prod with same build)"
+    "$0" prod
+    ;;
+
+  *)
+    echo "Usage: deploy.sh <dev|staging|prod|promote>"
+    echo ""
+    echo "  dev      Start Vite + Express in watch mode (ports 7205/7206)"
+    echo "  staging  Build + deploy to staging (nginx :7211)"
+    echo "  prod     Build + deploy to production (Tailscale :7200)"
+    echo "  promote  Promote staging → production"
+    exit 1
+    ;;
+esac

@@ -5,6 +5,7 @@ import { SessionHeader } from './SessionHeader'
 import { SubagentPanel } from './SubagentPanel'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useAgentStream } from '@/lib/useAgentStream'
+
 import { useEffect, useMemo } from 'react'
 import { toast } from 'sonner'
 import type { SubagentInfo } from '@/lib/useAgentStream'
@@ -30,7 +31,6 @@ interface SessionViewProps {
 
 export function SessionView({ sessionId }: SessionViewProps) {
   const utils = trpc.useUtils()
-
   const {
     data: session,
     isLoading,

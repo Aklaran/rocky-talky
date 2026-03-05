@@ -834,8 +834,9 @@ describe('SSE Streaming (/api/stream/generate)', () => {
         },
       })
 
-      // Mock a long-running operation (20 seconds)
-      // Keepalive interval is 15 seconds, so we should get at least 1 keepalive
+      // Set keepalive interval to 100ms for fast testing
+      process.env.KEEPALIVE_INTERVAL_MS = '100'
+
       const mockEvents: AgentEvent[] = [
         { type: 'text', content: 'Starting...' },
         {
@@ -859,8 +860,8 @@ describe('SSE Streaming (/api/stream/generate)', () => {
       const delayedStream = async function* () {
         yield mockEvents[0]
         yield mockEvents[1]
-        // Simulate 20 second tool execution
-        await new Promise(resolve => setTimeout(resolve, 20000))
+        // Simulate delay long enough for a few keepalives (100ms interval)
+        await new Promise(resolve => setTimeout(resolve, 500))
         yield {
           type: 'tool_end' as const,
           toolCallId: 'tool-1',
@@ -876,16 +877,18 @@ describe('SSE Streaming (/api/stream/generate)', () => {
       const res = await supertest(app)
         .post('/api/stream/generate')
         .send({ sessionId: session.id })
-        .timeout(25000)
+        .timeout(5000)
         .expect(200)
 
       // Check for keepalive comments in the raw response
       // Keepalive comments are lines starting with ':'
       const keepaliveComments = res.text.match(/^: keepalive$/gm) || []
       
-      // Should have at least 1 keepalive (20s / 15s interval = ~1 keepalive)
+      // Should have at least 1 keepalive (500ms delay / 100ms interval)
       expect(keepaliveComments.length).toBeGreaterThanOrEqual(1)
-    }, 30000)
+
+      delete process.env.KEEPALIVE_INTERVAL_MS
+    }, 10000)
 
     it('stops sending keepalive when stream ends', async () => {
       const session = await prisma.session.create({
