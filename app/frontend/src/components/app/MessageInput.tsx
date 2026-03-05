@@ -58,7 +58,7 @@ export function MessageInput({ onSend, disabled }: MessageInputProps) {
           value={value}
           onChange={handleInput}
           onKeyDown={handleKeyDown}
-          placeholder="Type a message... (Enter to send, Shift+Enter for newline)"
+          placeholder="Message Annapurna..."
           disabled={disabled}
           rows={1}
           className="min-h-[40px] max-h-[200px] resize-none text-base"
